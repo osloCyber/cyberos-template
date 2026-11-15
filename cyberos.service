@@ -1,0 +1,13 @@
+[Unit]
+Description=cyberos dashbord
+After=network.target
+
+[Service]
+User=DITT_BRUKERNAVN
+WorkingDirectory=/home/DITT_BRUKERNAVN/cyberos
+Environment=CYBEROS_VAULT=/home/DITT_BRUKERNAVN/vault
+ExecStart=/home/DITT_BRUKERNAVN/cyberos/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8080
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

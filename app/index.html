@@ -1,0 +1,1296 @@
+<!doctype html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1420">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/ikon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/ikon.svg">
+<title>cyberos · cyberos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600&family=Atkinson+Hyperlegible&display=swap" rel="stylesheet">
+<style>
+  /* Farger og regler: docs/design.md */
+  :root { --blekk:#0E1420; --panel:#151D2B; --linje:#25303F; --tekst:#EEF1F6; --staal:#8A96A8; --rav:#F2A33A; --gronn:#5DBB7A; --rod:#E0523E; --hvile:#6FA8C8; }
+  * { box-sizing:border-box }
+  html, body { height:100% }
+  body { margin:0; background:var(--blekk); color:var(--tekst); font:15px/1.5 "Atkinson Hyperlegible", system-ui, sans-serif; display:flex; flex-direction:column }
+  h1, h2, .tall, .navn, .tid, .kpi b { font-family:"Chakra Petch", sans-serif; font-weight:600 }
+  header { display:flex; align-items:baseline; gap:18px; padding:12px 20px; border-bottom:1px solid var(--linje); flex-wrap:wrap }
+  header h1 { margin:0; font-size:20px; letter-spacing:.14em; display:flex; align-items:center; gap:9px; text-shadow:0 0 14px rgba(111,168,200,.55) }
+  header h1 svg { width:22px; height:22px }
+  #stripe { display:flex; gap:18px; color:var(--staal); flex-wrap:wrap }
+  #stripe b { color:var(--tekst); font-family:"Chakra Petch"; margin-right:4px }
+  #stripe b.rav { color:var(--rav) }
+  #oppdatert { margin-left:auto; color:var(--staal); font-size:13px }
+  #jarvis { display:flex; gap:6px; align-items:center; margin-left:auto }
+  #jarvis input { width:min(38vw, 320px); background:var(--panel); border:1px solid var(--linje); border-radius:999px; color:var(--tekst); font:inherit; padding:6px 14px }
+  #jarvis input:focus-visible { outline:2px solid var(--tekst); outline-offset:1px }
+  #jarvis button { background:var(--panel); border:1px solid var(--linje); border-radius:999px; color:var(--tekst); font:inherit; padding:6px 12px; cursor:pointer; white-space:nowrap }
+  #jarvis button:hover { border-color:var(--staal) }
+  #jarvis button.hoerer { border-color:var(--hvile); color:var(--hvile) }
+  #jarvis button.lytter { border-color:var(--rav); color:var(--rav); box-shadow:0 0 8px var(--rav); animation:puls 1.5s ease-in-out infinite }
+  #jarvis button[aria-pressed="true"] { border-color:var(--hvile); color:var(--hvile) }
+  #jarvis .svar { color:var(--staal); font-size:13px; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  #oppdatert { margin-left:0 }
+  #bunn { display:none }
+  @media (max-width: 820px) { #jarvis { margin-left:0; width:100% } #jarvis input { flex:1; width:auto } }
+  /* smal skjerm: to linjer. Linje én: logo og tallene. Linje to: Jarvis-feltet. Klokka nederst på siden. */
+  @media (max-width: 640px) {
+    header { padding:8px 12px; gap:6px 10px; align-items:center }
+    header h1 { font-size:16px; letter-spacing:.1em; gap:6px } header h1 svg { width:18px; height:18px }
+    #stripe { gap:8px; font-size:12px; flex-wrap:nowrap; overflow:hidden; white-space:nowrap } #stripe b { margin-right:2px }
+    #jarvis { order:3; gap:4px } #jarvis input { padding:6px 10px; font-size:14px } #jarvis button { padding:6px 9px; font-size:13px }
+    #jarvis .svar { flex-basis:100%; max-width:none; text-align:center } #jarvis .svar:empty { display:none }   /* «sendt til Hermes» på egen linje, bare når den har noe å si */
+    #oppdatert { display:none }
+    #bunn { display:block; grid-column:1 / -1; padding:8px 12px 12px; color:var(--staal); font-size:12px; text-align:center }
+  }
+  main { flex:1; display:grid; grid-template-columns:minmax(0,1fr) 380px; min-height:0 }
+  #stasjon { position:relative; overflow:hidden; border-right:1px solid var(--linje); background:var(--blekk) }
+  #kart { position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:grab }
+  #kart.drar { cursor:grabbing }
+  #mannskap { position:absolute; left:0; top:0; width:1px; height:1px; overflow:hidden }
+  #mannskap button { position:absolute; left:0; top:0; width:1px; height:1px; opacity:0; border:0; padding:0 }
+  aside { display:flex; flex-direction:column; min-height:0; overflow:auto }
+  aside section { padding:14px 18px; border-bottom:1px solid var(--linje) }
+  aside h2 { margin:0 0 8px; font-size:14px; color:var(--staal) }
+  ul { list-style:none; margin:0; padding:0 }
+  li { padding:6px 0; border-top:1px solid var(--linje); display:flex; gap:10px; align-items:baseline }
+  li:first-child { border-top:0 }
+  .tid { color:var(--staal); font-size:13px; flex:none; width:44px }
+  .dim { color:var(--staal) }
+  .ok { color:var(--gronn) } .feil { color:var(--rod) } .varsel { color:var(--hvile) } .paagaar { color:var(--rav) }
+  .ferdig { text-decoration:line-through; color:var(--staal) }
+  /* tallene: fire små kort i én rad */
+  #tall { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px }
+  .kpi { background:var(--panel); border:1px solid var(--linje); border-radius:10px; padding:8px 10px; min-width:0 }
+  .kpi b { display:block; font-size:22px; line-height:1.1 }
+  .kpi b.rav { color:var(--rav) } .kpi b.rod { color:var(--rod) }
+  .kpi span { color:var(--staal); font-size:12px }
+  /* avdelinger */
+  .avd { display:block; padding:8px 0; border-top:1px solid var(--linje) }
+  .avd:first-child { border-top:0 }
+  .avd > button { background:none; border:0; color:var(--aks); font:600 14px "Chakra Petch", sans-serif; cursor:pointer; padding:0; display:flex; align-items:center; gap:8px }
+  .avd > button::before { content:""; width:8px; height:8px; border-radius:2px; background:var(--bar, var(--aks)) }
+  .avd > button:hover { text-decoration:underline }
+  .avd > button:focus-visible { outline:2px solid var(--tekst); outline-offset:2px }
+  .agenter { margin:4px 0 0 16px }
+  .agenter li { border:0; padding:3px 0; font-size:14px; gap:8px; cursor:pointer }
+  .agenter li:hover .vis { text-decoration:underline }
+  .prikk { width:9px; height:9px; border-radius:50%; flex:none; background:var(--staal); opacity:.5; position:relative; top:1px }
+  .prikk.aktiv { opacity:1 }
+  .prikk.jobber { background:var(--rav); opacity:1; box-shadow:0 0 8px var(--rav); animation:puls 2s ease-in-out infinite }
+  .prikk.feil { background:var(--rod); opacity:1 }
+  .prikk.venter { background:none; border:1.5px solid var(--staal); opacity:.7 }
+  @keyframes puls { 50% { box-shadow:0 0 2px var(--rav) } }
+  @media (prefers-reduced-motion: reduce) { .prikk.jobber, #jarvis button.lytter { animation:none } }
+  .agenter .hva { color:var(--staal); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0 }
+  #naa li .rom { color:var(--aks); font-size:12px }
+  /* tegnforklaring */
+  #forklaring { display:flex; flex-wrap:wrap; gap:6px 16px; color:var(--staal); font-size:13px }
+  #forklaring span { display:flex; align-items:center; gap:6px }
+  /* detaljpanel */
+  #detalj { position:absolute; right:16px; top:16px; max-width:360px; background:rgba(21,29,43,.92); backdrop-filter:blur(8px); border:1px solid var(--linje); border-radius:12px; padding:12px 14px; display:none }
+  #detalj.vis { display:block }
+  #detalj .navn { font-size:16px }
+  #detalj p { margin:6px 0 0 }
+  #detalj button { float:right; background:none; border:0; color:var(--staal); font:inherit; cursor:pointer }
+  #detalj button:focus-visible { outline:2px solid var(--rav); outline-offset:2px }
+  .tom { position:absolute; left:20px; top:20px; color:var(--staal); display:none }
+  /* døgnet: 24 timer under stasjonen, en prikk per kjøring */
+  #tidslinje { position:absolute; left:0; right:0; bottom:0; height:30px; background:rgba(14,20,32,.72); border-top:1px solid var(--linje); backdrop-filter:blur(6px) }
+  #tidslinje .time { position:absolute; bottom:2px; font:11px "Chakra Petch", sans-serif; color:var(--staal); transform:translateX(-50%) }
+  #tidslinje .strek { position:absolute; top:0; width:1px; height:6px; background:var(--linje) }
+  #tidslinje .naa { position:absolute; top:0; width:2px; height:100%; background:var(--rav); opacity:.7 }
+  #tidslinje .kj { position:absolute; top:9px; width:8px; height:8px; border-radius:50%; transform:translateX(-50%); background:var(--aks, var(--staal)) }
+  #tidslinje .kj.feil { background:var(--rod) }
+  #styring { bottom:40px }
+  /* gi jobb fra panelet */
+  #detalj form { display:flex; gap:6px; margin-top:10px }
+  #detalj input { flex:1; min-width:0; background:var(--blekk); border:1px solid var(--linje); border-radius:8px; color:var(--tekst); font:inherit; padding:6px 10px }
+  #detalj input:focus-visible { outline:2px solid var(--tekst); outline-offset:1px }
+  #detalj form button { float:none; background:var(--panel); border:1px solid var(--linje); border-radius:8px; color:var(--tekst); padding:6px 10px }
+  #detalj form button:hover { border-color:var(--staal) }
+  #detalj .svar { font-size:13px; margin-top:6px }
+  #detalj .hist { margin-top:6px; font-size:13px }
+  #detalj .hist li { padding:3px 0; gap:8px }
+  #detalj .hist .tid { width:40px }
+  .agenter .opp { color:var(--staal); font-size:12px; white-space:nowrap }
+  .agenter .kost { color:var(--staal); font-size:12px; margin-left:auto; white-space:nowrap }
+  .agenter .kost.over { color:var(--rod) }
+  #styring { position:absolute; left:12px; display:flex; gap:4px }
+  #styring button { background:rgba(21,29,43,.85); border:1px solid var(--linje); border-radius:8px; color:var(--tekst); font:600 13px "Chakra Petch", sans-serif; min-width:34px; height:30px; padding:0 8px; cursor:pointer }
+  #styring button:hover { border-color:var(--staal) }
+  #styring button:focus-visible { outline:2px solid var(--tekst); outline-offset:2px }
+  @media (pointer: coarse) { #styring { left:14px; bottom:calc(44px + env(safe-area-inset-bottom)); gap:8px } #styring button { min-width:44px; height:44px; font-size:16px } #tidslinje { padding-bottom:env(safe-area-inset-bottom); background:rgba(14,20,32,.88) } #tidslinje, #detalj { backdrop-filter:none } }   /* berøring: minst 44 px og klar av Safari-linja nederst. Uskarphet over et levende canvas koster for mye på mobil. */
+  /* nettbrett og mobil: stasjonen i full bredde øverst, panelene under */
+  @media (max-width: 1100px) { html, body { height:auto; min-height:100% } main { display:block } #stasjon { height:60vh; min-height:360px; border-right:0; border-bottom:1px solid var(--linje) } aside { overflow:visible } }
+  /* nettbrett: panelene i to kolonner */
+  @media (min-width: 641px) and (max-width: 1100px) { aside { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:start } aside section { border-bottom:1px solid var(--linje); min-width:0; overflow:hidden } aside section:nth-child(odd) { border-right:1px solid var(--linje) } aside section:first-child { grid-column:1 / -1; border-right:0 } }
+  @media (max-width: 640px) { #tall { grid-template-columns:repeat(2,1fr) } }
+
+  /* ---------- kulere: fargestripe i headeren, glød på kort, scanlinjer og vignett over stasjonen ---------- */
+  header { position:relative; background:linear-gradient(90deg, rgba(79,168,255,.12), rgba(176,107,255,.08) 45%, rgba(255,79,216,.08) 75%, rgba(255,176,79,.06)) }
+  header::after { content:""; position:absolute; left:0; right:0; bottom:-1px; height:2px; background:linear-gradient(90deg,#4FA8FF,#B06BFF,#FF4FD8,#FFB04F,#4FFFB0,#4FA8FF); background-size:200% 100%; animation:flyt 9s linear infinite; box-shadow:0 0 14px rgba(176,107,255,.55) }
+  @keyframes flyt { to { background-position:-200% 0 } }
+  #stasjon::before { content:""; position:absolute; inset:0; z-index:2; pointer-events:none; background:repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 3px), radial-gradient(ellipse at center, transparent 55%, rgba(5,8,16,.55) 100%) }
+  aside { background:linear-gradient(180deg, rgba(21,29,43,.55), rgba(10,14,24,.2)) }
+  aside h2 { color:#AAB8CC; letter-spacing:.14em; text-transform:uppercase; font-size:12px; display:flex; align-items:center; gap:8px }
+  aside h2::before { content:""; width:14px; height:2px; background:linear-gradient(90deg,#4FA8FF,#FF4FD8); border-radius:2px; box-shadow:0 0 8px #B06BFF }
+  .kpi { background:linear-gradient(150deg,#1A2538,#0F1626); border-color:#2D3C56; box-shadow:0 0 18px rgba(79,168,255,.07), inset 0 1px 0 rgba(255,255,255,.04) }
+  .kpi b { text-shadow:0 0 12px currentColor }
+  .avd > button::before { box-shadow:0 0 8px var(--bar, var(--aks)) }
+  aside section { border-bottom-color:#2A3850 }
+  #detalj { box-shadow:0 0 30px rgba(79,168,255,.12) }
+  @media (prefers-reduced-motion: reduce) { header::after { animation:none } }
+</style>
+</head>
+<body>
+<header>
+  <h1><svg viewBox="0 0 24 24" aria-hidden="true"><defs><radialGradient id="g1" cx="40%" cy="35%" r="65%"><stop offset="0" stop-color="#6FA8C8"/><stop offset="1" stop-color="#1E5A64"/></radialGradient></defs><circle cx="12" cy="12" r="6.5" fill="url(#g1)"/><ellipse cx="12" cy="12" rx="11" ry="3.6" fill="none" stroke="#8A96A8" stroke-width="1.3" transform="rotate(-22 12 12)"/><circle cx="20.5" cy="6.5" r="1.3" fill="#EEF1F6"/></svg>cyberos</h1>
+  <div id="stripe"></div>
+  <form id="jarvis" onsubmit="return siTil(event)"><input name="tekst" maxlength="2000" placeholder="Si til Hermes" aria-label="Si til Hermes" autocomplete="off"><button type="button" id="mikk" onclick="lytt()" aria-label="Snakk" title="Snakk (Chrome og Edge)">&#127908;</button><button type="submit">Send</button><button type="button" id="stemme" onclick="stemmeAvPaa()" aria-pressed="false" title="Jarvis sier fra med stemme når noe skjer">Jarvis av</button><span class="svar" aria-live="polite"></span></form>
+  <span id="oppdatert">laster</span>
+</header>
+<main>
+  <div id="stasjon">
+    <canvas id="kart" role="img" aria-label="Stasjonen: agentene i rommene sine"></canvas>
+    <div id="mannskap" aria-label="Mannskap"></div>
+    <div class="tom" id="tom">Ingen agenter. Lag en fil i Agenter/.</div>
+    <div id="detalj" role="dialog" aria-live="polite"></div>
+    <div id="tidslinje" aria-label="Kjøringer siste døgn"></div>
+    <div id="styring" aria-label="Snu og zoom">
+      <button onclick="snu(-1)" title="Snu mot venstre (Q)" aria-label="Snu mot venstre">&#8630;</button><button onclick="snu(1)" title="Snu mot høyre (E)" aria-label="Snu mot høyre">&#8631;</button>
+      <button onclick="zoom(-1)" title="Zoom ut (−)" aria-label="Zoom ut">&minus;</button><button onclick="zoom(1)" title="Zoom inn (+)" aria-label="Zoom inn">+</button>
+    </div>
+  </div>
+  <aside>
+    <section><div id="tall"></div></section>
+    <section><h2>Avdelinger</h2><div id="avdelinger"></div></section>
+    <section id="naa"><h2>Skjer nå</h2><ul id="loggliste"></ul></section>
+    <section><h2>Innboks</h2><ul id="innboksliste"></ul></section>
+    <section><h2>Oppgaver</h2><ul id="oppgaver"></ul></section>
+    <section><h2>Slik leser du stasjonen</h2><div id="forklaring">
+      <span><i class="prikk jobber"></i>jobber nå, rav lys</span><span><i class="prikk aktiv"></i>på, men venter på jobb</span><span><i class="prikk feil"></i>siste kjøring feilet</span><span><i class="prikk venter"></i>ikke bygd ennå</span>
+      <span>Lyspakker mellom agenter = de jobber samtidig. Headquarter ligger øverst, det er ledelsen.</span>
+    </div></section>
+  </aside>
+<footer id="bunn"><span id="oppdatert-bunn"></span></footer>
+</main>
+<script>
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const klokke = navn => (navn.match(/^\d{4}-\d{2}-\d{2}-(\d{2})(\d{2})/) || []).slice(1).join(":") || "";
+let valgt = null, fokus = null, data = null;
+const stille = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// Rom: frontmatter `rom:` hvis satt, ellers Hangar for venter og Verksted for resten.
+const rom = a => a.rom || (a.status === "venter" ? "Hangar" : "Verksted");
+
+/* Stasjonen: moderne isometrisk illustrasjon tegnet i kode på canvas, skarp i full oppløsning. Enheten er 1 "u": en flis er 16 x 8 u.
+   `bak` (rom, vegger, møbler) tegnes til et eget lerret i gjeldende skala når noe endrer seg. Lys, figurer og pakker tegnes hver ramme rett på skjermen.
+   Rav betyr jobber nå. Rødt betyr feil. Hvilelys er på, men venter. Venter (ikke bygd) er gjennomsiktig. */
+const TW = 8, TH = 4, VH = 20, LH = 5, SK = 7, DYP = 7, MARG = 14, HEV = 14;   // halv flisbredde/-høyde, bakvegg, glassrekkverk, skrog, romdybde, marg, Headquarter-høyde
+const F = { gulv:"#182131", gulv2:"#121A27", kant:"#263141", vegg:"#1F2938", vegg2:"#2A3547", topp:"#48556B", skrog:"#131A26", skrog2:"#080C14", korridor:"#141C2A",
+  maskin:"#2F3B4E", maskin2:"#1F2937", skjerm:"#3A4252", hvile:"#6FA8C8", teal:"#2E7F86", rom:"#0A1020", kropp:"#C9D1DC", hode:"#E6EBF2", blekk:"#0E1420", staal:"#8A96A8", tekst:"#EEF1F6", rav:"#F2A33A", rod:"#E0523E", gull:"#E0B64A" };
+const kart = document.getElementById("kart"), ktx = kart.getContext("2d");
+const bak = document.createElement("canvas"), btx = bak.getContext("2d");
+const himmel = document.createElement("canvas"), htx = himmel.getContext("2d");
+let rommene = [], romTreff = [], figurer = {}, bilder = {}, org = [0, 0], S = 2, Sb = 0, pan = { x:0, y:0 }, treff = [], rot = 0, tilpasset = false, enhet = [0, 0];
+
+const vri = (x, y) => rot === 0 ? [x, y] : rot === 1 ? [-y, x] : rot === 2 ? [-x, -y] : [y, -x];
+function hev(x, y) {   // høyde over grunnplanet: Headquarter ligger HEV u opp, rampene i korridorene stiger jevnt mot det
+  const n = rommene[0]; if (!n || n.side !== "hub") return 0;
+  if (x >= n.x && x <= n.x + n.w && y >= n.y && y <= n.y + n.h) return HEV;
+  for (let k = 1; k < rommene.length; k++) {
+    const g = rommene[k].stubb, sd = rommene[k].side; if (!g || x < g.x || x > g.x + g.w || y < g.y || y > g.y + g.h) continue;
+    return HEV * (sd === "N" ? (y - g.y) / g.h : sd === "S" ? 1 - (y - g.y) / g.h : sd === "E" ? 1 - (x - g.x) / g.w : (x - g.x) / g.w);
+  }
+  return 0;
+}
+const px = (x, y) => { const [a, b] = vri(x, y); return [(a - b) * TW + org[0], (a + b) * TH + org[1] - hev(x, y)]; };
+const dyp = (x, y) => { const [a, b] = vri(x, y); return a + b; };
+const bak_ = side => (side + rot) % 4 < 1 || (side + rot) % 4 === 3;   // havner siden bak (N eller V) i visningen?
+const front = () => !bak_(2);
+
+const ROMSTIL = { headquarter: "#3FD1C8", hq: "#3FD1C8", broen: "#3FD1C8", verksted: "#4FA8FF", lab: "#4EF0B0", studio: "#C65BFF", wallstreet: "#FFC447", marked: "#FFC447", radar: "#5B8FFF", utkikk: "#5B8FFF", helse: "#B6F04A" };
+const NEON = "#E04A9A";   // cyberpunk-magenta, bare pynt på skrog, sømmer og datalinjer
+const stil = r => ROMSTIL[r.navn.toLowerCase()] || F.teal;   // aksentfargen er rommets identitet, ikke tilstand
+const alleFarger = () => [...new Set(rommene.slice(1).map(stil))];
+function aksent(c, r) {   // tegnefarge for rommet. Headquarter får alle basenes farger i én gradient: hovedbasen samler dem.
+  if (r.side !== "hub" || rommene.length < 3) return stil(r);
+  const [x0] = px(r.x, r.y + r.h), [x1] = px(r.x + r.w, r.y), g = c.createLinearGradient(x0, 0, x1, 0), f = alleFarger();
+  f.forEach((h, i) => g.addColorStop(i / (f.length - 1), h)); return g;
+}
+const rgba = (hex, a) => `rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
+const blandet = (a, b, k) => "#" + [0, 2, 4].map(i => Math.round(parseInt(a.slice(1 + i, 3 + i), 16) * (1 - k) + parseInt(b.slice(1 + i, 3 + i), 16) * k).toString(16).padStart(2, "0")).join("");
+
+function bygg(d) {
+  const grupper = {};
+  for (const a of d.agenter) (grupper[rom(a)] ||= []).push(a);
+  // Headquarter ligger i midten. Basene ligger rundt: to nord, to sør, én øst, én vest, hver med sin egen korridor inn.
+  const navn = Object.keys(grupper), nav = navn.find(n => ["headquarter", "hq", "broen"].includes(n.toLowerCase())) || navn[0], sat = navn.filter(n => n !== nav);
+  const GAP = 5, plasser = ["N0", "N1", "S0", "S1", "E", "V"], onsket = { verksted: "N0", lab: "N1", studio: "S0", wallstreet: "S1", marked: "S1", radar: "E", utkikk: "E", helse: "V", hangar: "V" }, plass = {}, brukt = new Set();
+  for (const n of sat) { const q = onsket[n.toLowerCase()]; if (q && !brukt.has(q)) { plass[n] = q; brukt.add(q); } }
+  for (const n of sat) if (!plass[n]) { const q = plasser.find(q => !brukt.has(q)); if (q) { plass[n] = q; brukt.add(q); } }   // shortcut: flere enn seks baser får ikke plass, legg til en ring til når det trengs
+  const bredde = n => Math.max(6, grupper[n].length * 2 + 3) + (n.toLowerCase() === "verksted" ? 8 : 0), sum = s => sat.filter(n => plass[n]?.[0] === s).reduce((t, n) => t + bredde(n) + 1, 1);
+  const lag = (n, x, y, w, h, side) => { const mellom = side === "hub" ? 6 : 2; return { navn: n, x, y, w, h, side, dorer: {}, agenter: grupper[n].map((a, j) => ({ ...a, plass: [x + 2 + mellom * j, y + 1.5], pult: [x + 2 + mellom * j, y + .5] })) }; };   // Headquarter: store figurer, en hel figurbredde mellom pultene
+  const W = Math.max(9, Math.ceil(grupper[nav].length * 6 + 2), sum("N"), sum("S")), H = 8, hub = lag(nav, 0, 0, W, H, "hub");
+  rommene = [hub]; let nx = 0, sx = 0;
+  for (const n of sat) {
+    const q = plass[n]; if (!q) continue;
+    const w = bredde(n), h = DYP + (n.toLowerCase() === "verksted" ? 3 : 0); let r;
+    if (q[0] === "N") { r = lag(n, nx, -(h + GAP), w, h, "N"); nx += w + 1; }
+    else if (q[0] === "S") { r = lag(n, sx, H + GAP, w, h, "S"); sx += w + 1; }
+    else if (q === "E") r = lag(n, W + GAP, 0, w, h, "E");
+    else r = lag(n, -(w + GAP), 0, w, h, "V");
+    if (q[0] === "N" || q[0] === "S") {
+      const d = r.x + (w >> 1) - 1, nord = q[0] === "N";
+      r.stubb = { x: d, y: nord ? -GAP : H, w: 2, h: GAP, aapne: [0, 2] }; r.dorer[nord ? 2 : 0] = [[d, d + 2]]; (hub.dorer[nord ? 0 : 2] ||= []).push([d, d + 2]);
+    } else {
+      const d = r.y + (h >> 1) - 1, ost = q === "E";
+      r.stubb = { x: ost ? W : -GAP, y: d, w: GAP, h: 2, aapne: [1, 3] }; r.dorer[ost ? 3 : 1] = [[d, d + 2]]; (hub.dorer[ost ? 1 : 3] ||= []).push([d, d + 2]);
+    }
+    rommene.push(r);
+  }
+  maal();
+  const sett = new Set();   // figurer: behold posisjon mellom oppdateringer, nye starter i rommet sitt
+  for (const r of rommene) for (const a of r.agenter) {
+    sett.add(a.navn);
+    const f = figurer[a.navn] ||= { x: a.plass[0], y: a.plass[1] + 1 + Math.random() * 2, maal: null, pause: 1 + Math.random() * 3, gaar: false };
+    f.agent = a; f.rom = r; f.plass = a.plass;
+    if (f.x < r.x || f.x > r.x + r.w || f.y < r.y || f.y > r.y + r.h) { [f.x, f.y] = a.plass; f.maal = null; }
+  }
+  for (const n in figurer) if (!sett.has(n)) delete figurer[n];
+  for (const a of d.agenter) if (!(a.navn in bilder)) {   // bilde i vaulten? Agenter/<navn>.png med gjennomsiktig bakgrunn blir figuren
+    bilder[a.navn] = false; const im = new Image(); im.onload = () => { bilder[a.navn] = im; stille && ramme(); }; im.onerror = () => { bilder[a.navn] = null; }; im.src = "/api/bilde/" + encodeURIComponent(a.navn);
+  }
+}
+function maal() {   // ramme i u rundt alt som tegnes, i gjeldende rotasjon
+  const hjorner = rommene.flatMap(r => [[r.x, r.y], [r.x + r.w, r.y], [r.x, r.y + r.h], [r.x + r.w, r.y + r.h]]).map(([x, y]) => vri(x, y)).map(([a, b]) => [(a - b) * TW, (a + b) * TH]);
+  const xs = hjorner.map(p => p[0]), ys = hjorner.map(p => p[1]);
+  org = [MARG + 8 - Math.min(...xs), MARG + VH + 26 + HEV - Math.min(...ys)];
+  enhet = [Math.max(...xs) - Math.min(...xs) + 2 * MARG + 16, Math.max(...ys) - Math.min(...ys) + VH + SK + HEV + 2 * MARG + 34];
+  const nokkel = rot + ":" + rommene.map(r => r.navn + r.x + "," + r.y + "," + r.w + "|" + r.agenter.map(a => a.navn).join(",")).join(";");
+  if (nokkel !== maal.nokkel) { maal.nokkel = nokkel; Sb = 0; }   // bakgrunnen tegnes bare på nytt når rom eller rotasjon endrer seg
+}
+
+/* ---------- tegnehjelpere, alle i u ---------- */
+function flate(c, pkt, farge) { c.fillStyle = farge; c.beginPath(); pkt.forEach(([a, b], i) => i ? c.lineTo(a, b) : c.moveTo(a, b)); c.closePath(); c.fill(); }
+function strek(c, pkt, farge, bredde = .6, alfa = 1, lukk = false) { c.save(); c.globalAlpha = alfa; c.strokeStyle = farge; c.lineWidth = bredde; c.lineJoin = "round"; c.lineCap = "round"; c.beginPath(); pkt.forEach(([a, b], i) => i ? c.lineTo(a, b) : c.moveTo(a, b)); if (lukk) c.closePath(); c.stroke(); c.restore(); }
+function rund(c, x, y, w, h, r, farge) { c.fillStyle = farge; c.beginPath(); c.roundRect(x, y, w, h, r); c.fill(); }
+function ellipse(c, x, y, rx, ry, farge, alfa = 1) { c.save(); c.globalAlpha = alfa; c.fillStyle = farge; c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, 7); c.fill(); c.restore(); }
+function glod(c, x, y, r, farge, alfa, flat = true) {   // mykt lys, flatt på gulvet eller rundt
+  const g = c.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, farge); g.addColorStop(1, rgba(farge, 0));
+  c.save(); c.globalAlpha = alfa; if (flat) { c.translate(x, y); c.scale(1, .5); c.translate(-x, -y); } c.fillStyle = g; c.fillRect(x - r, y - r, 2 * r, 2 * r); c.restore();
+}
+const hash = (x, y) => ((x * 73856093) ^ (y * 19349663)) >>> 0;
+function stoy(x, y, skala) {   // glatt verdistøy fra hash, to oktaver, 0..1
+  const en = (x, y) => {
+    const ix = Math.floor(x / skala), iy = Math.floor(y / skala), fx = x / skala - ix, fy = y / skala - iy, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+    const h = (a, b) => (hash(a + 7919, b + 104729) % 1000) / 1000;
+    return (h(ix, iy) * (1 - u) + h(ix + 1, iy) * u) * (1 - v) + (h(ix, iy + 1) * (1 - u) + h(ix + 1, iy + 1) * u) * v;
+  };
+  return en(x, y) * .65 + en(x * 2 + 31, y * 2 + 17) * .35;
+}
+
+/* ---------- bakteppe: nebulose, stjerner, måne og jorda. Fast målestokk SB, uavhengig av zoom. ---------- */
+const VERDEN = [
+  "........................................................................",
+  "........................................................................",
+  "........................................................................",
+  "........................................................................",
+  "...ggggggggggggggggggggggg.iiiiiiggggg....gggggggggggggggggggggggggggggg",
+  "..gggggggggggggggggggggggg..iiii.ggggg..gggggggggggggggggggggggggggggggg",
+  "...gggggggggggggggg..ggggg...gggg.....gg.gggggggggggggggggggggggggg...gg",
+  "...........gggggggggggggg........ggggggggggggggggggggggggggggggg....gg..",
+  "...........gggggggggggggg...........ggggggggggggggggggggggggggggggg.....",
+  "...........ggggggggggg...........gggggggggggggggggggggggggggggggg.......",
+  "............gggggggggg...........gggg....gggggddddgggggggggggggggg......",
+  ".............ggggggggg...........ddddddddddddddddddgggggggggg...........",
+  ".............gggggggg............dddddddddddddddgggggggggggg............",
+  ".............gggggggg............dddddddddddddddgggggggggggg............",
+  "..............gggg..gggg.........ddddddddddddddd..gggggggggggg...........",
+  "...............ggg....ggg........ggggggggggggg.....gggg..ggggg..........",
+  "..................gggggggg.......gggggggggggggg.....g..ggg..g...........",
+  "....................ggggggg........ggggggggggg.........gg.ggg...........",
+  "....................ggggggggg.......gggggggggg..........ggggg.ggggg.....",
+  "....................gggggggggg.......ggggggggg...........gggg.ggggg.....",
+  "....................gggggggggg.......gggggggg...............ggggggg.....",
+  ".....................ggggggggg........ggggggg.gg............gggggggg....",
+  ".....................gggggggg.........gggggg.gg...........ggddddddgg....",
+  "......................gggggg...........ggggg..............ggddddddgg....",
+  "......................gggg.............gggg...............ggggggggg.....",
+  "......................gggg......................................ggg.....",
+  "......................ggg........................................g...gg.",
+  "......................ggg............................................gg.",
+  "......................gg................................................",
+  "........................................................................",
+  "........................................................................",
+  "........................................................................",
+  "........................................................................",
+  "........................................................................",
+  "........................................................................",
+  "........................................................................"];
+const jordL = document.createElement("canvas"), jtx = jordL.getContext("2d"); let jordPos = [0, 0], jordLon = -22, jordR = 0, sistJord = 0, jordJobb = null;
+function landVed(lat, lon) {   // land-, ørken- og isandel på et punkt, interpolert mellom 5-gradersrutene så kysten blir glatt
+  const fr = (90 - lat) / 5 - .5, fc = (lon + 180) / 5 - .5, r0 = Math.floor(fr), c0 = Math.floor(fc), u = fr - r0, v = fc - c0;
+  const rute = (r, c) => VERDEN[Math.min(35, Math.max(0, r))][((c % 72) + 72) % 72];
+  let land = 0, d = 0, is = 0;
+  for (const [k, a] of [[rute(r0, c0), (1 - u) * (1 - v)], [rute(r0 + 1, c0), u * (1 - v)], [rute(r0, c0 + 1), (1 - u) * v], [rute(r0 + 1, c0 + 1), u * v]]) { if (k !== ".") land += a; if (k === "d") d += a; if (k === "i") is += a; }
+  return [land, d, is];
+}
+function jordStart() { const m = jordR + 8; if (jordL.width !== 2 * m) jordL.width = jordL.height = 2 * m; jordJobb = { y: 0, m, bilde: jtx.createImageData(2 * m, 2 * m) }; }
+function jordSteg(budsjett) {   // ortografisk projeksjon av VERDEN, sol fra oppe til høyre. Tegner rader til budsjettet (ms) er brukt.
+  if (!jordJobb) return;
+  const frist = performance.now() + budsjett, R = jordR, { m, bilde } = jordJobb, d = bilde.data;
+  const hav = [[10, 40, 96], [16, 58, 124], [24, 80, 150]], grunne = [38, 120, 160], gress = [[62, 112, 58], [44, 86, 48], [88, 124, 66]], fjell = [78, 92, 80], sand = [112, 134, 96], is = [228, 236, 242], sky = [236, 240, 246], atm = [96, 170, 230], by = [240, 210, 150];
+  const lat0 = -8 * Math.PI / 180, lon0 = jordLon * Math.PI / 180, sl = Math.sin(lat0), cl = Math.cos(lat0);
+  const L = [.55, .62, .56], ln = Math.hypot(...L); L.forEach((q, i) => L[i] = q / ln);   // fast sol oppe til høyre, så jorda alltid er lys
+  const Hv = [L[0], L[1], L[2] + 1], hn = Math.hypot(...Hv); Hv.forEach((v, i) => Hv[i] = v / hn);
+  for (; jordJobb.y < jordL.height && performance.now() < frist; jordJobb.y++) for (let x = 0, y = jordJobb.y; x < jordL.width; x++) {
+    const dx = x - m, dy = y - m, r = Math.hypot(dx, dy); if (r > R + 7) continue;
+    const i = 4 * (y * jordL.width + x);
+    if (r > R) { const a = (R + 7 - r) / 7; d[i] = atm[0]; d[i + 1] = atm[1]; d[i + 2] = atm[2]; d[i + 3] = 120 * a * a; continue; }
+    const X = dx / R, Y = -dy / R, Z = Math.sqrt(Math.max(0, 1 - X * X - Y * Y));
+    const lat = Math.asin(Y * cl + Z * sl), lon = lon0 + Math.atan2(X, cl * Z - Y * sl), latg = lat * 180 / Math.PI, long = ((lon * 180 / Math.PI + 540) % 360) - 180;
+    const [land, ork, isa] = landVed(latg, long), rufs = (stoy(x + 11, y + 23, 6) - .5) * .5, n1 = stoy(x, y, 15), n2 = stoy(x + 200, y + 50, 5);
+    let f;
+    if (Math.abs(latg) > 67 + rufs * 8 || isa + rufs > .5) f = is;
+    else if (land + rufs > .5) f = ork + rufs * .6 > .45 ? sand : n2 > .72 ? fjell : gress[n1 > .6 ? 2 : n1 > .4 ? 0 : 1];
+    else f = land + rufs > .3 ? grunne : hav[n1 > .62 ? 2 : n1 > .4 ? 1 : 0];
+    const vx = x + 30 * stoy(x + 13, y + 7, 26), vy = y + 30 * stoy(x + 91, y + 57, 26);
+    const skyA = Math.min(.8, Math.max(0, (stoy(vx * .8 + 500, vy * 1.4 + 300, 10) - .55) * 3.2));
+    f = f.map((v, k) => v * (1 - skyA) + sky[k] * skyA);
+    const diff = Math.max(0, X * L[0] + Y * L[1] + Z * L[2]), lys = .08 + .95 * Math.pow(diff, .8);
+    const glans = land + rufs > .5 || skyA > .3 ? 0 : Math.pow(Math.max(0, X * Hv[0] + Y * Hv[1] + Z * Hv[2]), 70) * .7;
+    const rim = Math.pow(1 - Z, 2.4) * .8;
+    f = f.map((v, k) => (v * lys + 255 * glans) * (1 - rim) + atm[k] * rim * (.25 + diff * .9));
+    if (diff < .08 && land + rufs > .5 && skyA < .3 && hash(x, y) % 19 === 0) f = by.map(v => v * .8);
+    d[i] = f[0]; d[i + 1] = f[1]; d[i + 2] = f[2]; d[i + 3] = 255;
+  }
+  if (jordJobb.y >= jordL.height) { jtx.putImageData(bilde, 0, 0); jordJobb = null; }
+}
+const jord = () => { jordStart(); jordSteg(Infinity); };
+let blink = [], skudd = null;
+const PARALLAKSE = .3, SB = 2; let himE = 0;   // himmelen følger med når du drar, men bare 30 %. Fast målestokk, den er uendelig langt unna.
+function tegnHimmel() {   // tegnes bare når ruta endrer størrelse
+  himE = 220; himmel.width = Math.ceil(kart.width / SB) + 1 + 2 * himE; himmel.height = Math.ceil(kart.height / SB) + 1 + 2 * himE;
+  const c = htx, W = himmel.width, H = himmel.height;
+  c.fillStyle = F.blekk; c.fillRect(0, 0, W, H);
+  let t = 1337; const r = () => (t = (t * 16807) % 2147483647) / 2147483647;
+  for (const [fx, fy, rad, farge] of [[.7, .2, .55, "#1E2A5A"], [.25, .6, .4, "#3A1A44"], [.85, .75, .35, "#10404A"], [.5, .95, .3, "#3A1838"]]) {
+    const g = c.createRadialGradient(W * fx, H * fy, 0, W * fx, H * fy, W * rad); g.addColorStop(0, farge); g.addColorStop(1, "transparent"); c.globalAlpha = .5; c.fillStyle = g; c.fillRect(0, 0, W, H);
+  }
+  c.globalAlpha = 1;
+  for (let i = 0; i < W * H / 150; i++) {
+    const x = r() * W, y = r() * H, k = r(), rad = k < .05 ? 1.1 : .6;
+    c.globalAlpha = k < .05 ? .9 : .15 + r() * .35; c.fillStyle = k < .05 ? F.tekst : k < .5 ? F.staal : F.hvile; c.beginPath(); c.arc(x, y, rad, 0, 7); c.fill();
+    if (k < .02) { const g = c.createRadialGradient(x, y, 0, x, y, 5); g.addColorStop(0, "rgba(238,241,246,.5)"); g.addColorStop(1, "transparent"); c.fillStyle = g; c.fillRect(x - 5, y - 5, 10, 10); }
+  }
+  c.globalAlpha = 1;
+  const mx = Math.round(W * .86), my = Math.round(H * .14);   // månen
+  const mg = c.createRadialGradient(mx - 2, my - 2, 1, mx, my, 8); mg.addColorStop(0, "#C9D1DC"); mg.addColorStop(1, "#6E7784"); c.fillStyle = mg; c.beginPath(); c.arc(mx, my, 7, 0, 7); c.fill();
+  c.fillStyle = "rgba(80,90,105,.6)"; for (const [a, b, rr] of [[2, -1, 1.6], [-3, 2, 1.2], [1, 3, .9]]) { c.beginPath(); c.arc(mx + a, my + b, rr, 0, 7); c.fill(); }
+  c.save(); c.beginPath(); c.arc(mx, my, 7, 0, 7); c.clip(); c.fillStyle = "rgba(10,16,32,.6)"; c.beginPath(); c.arc(mx - 3, my + 3, 9, 0, 7); c.fill(); c.restore();
+  blink = []; for (let i = 0; i < 40; i++) blink.push([r() * W, r() * H * .8, r() * 6.28, r() < .3]);
+  const vw = W - 2 * himE, vh = H - 2 * himE;
+  jordR = Math.min(240, Math.round(vh * .62)); jordPos = [Math.round(himE + vw * .12 - jordR - 8), Math.round(himE + vh * 1.18 - jordR - 8)]; jord();
+}
+
+/* ---------- stasjonen: statisk lag ---------- */
+function kanter(g, inn = 0) {   // sidebiter rundt et rektangel (N0 E1 S2 V3), minus dører og helt åpne sider. inn = hvor mye hjørnene er kuttet
+  const { x, y, w, h } = g, ut = [], gap = s => (g.dorer?.[s] || []).slice().sort((u, v) => u[0] - v[0]);
+  const biter = (s, a, b, fast) => { if (g.aapne?.includes(s)) return; let p = a; for (const [d1, d2] of gap(s)) { if (d1 > p) ut.push({ side: s, p: fast(p, d1) }); p = Math.max(p, d2); } if (b > p) ut.push({ side: s, p: fast(p, b) }); };
+  biter(0, x + inn, x + w - inn, (a, b) => [a, y, b, y]); biter(1, y + inn, y + h - inn, (a, b) => [x + w, a, x + w, b]);
+  biter(2, x + inn, x + w - inn, (a, b) => [b, y + h, a, y + h]); biter(3, y + inn, y + h - inn, (a, b) => [x, b, x, a]);
+  return ut;
+}
+function segmenter(r) {   // veggbitene rundt åttekanten: sidene pluss fire kuttede hjørner (NE0 SE1 SV2 NV3)
+  const { x, y, w, h } = r, ut = kanter(r, 1), hj = (hj, ...p) => ut.push({ hj, p });
+  hj(0, x + w - 1, y, x + w, y + 1); hj(1, x + w, y + h - 1, x + w - 1, y + h); hj(2, x + 1, y + h, x, y + h - 1); hj(3, x, y + 1, x + 1, y);
+  for (const t of ut) { const c = (t.hj + rot) % 4; t.hoy = t.hj === undefined ? bak_(t.side) : c === 0 || c === 3; }
+  return ut;
+}
+const ganger = () => rommene.filter(r => r.stubb).map(r => r.stubb);
+function stubbEnder(r) {   // [headquarter-siden, base-siden] av stubben, midt i gangen
+  const g = r.stubb, s = r.side;
+  return s === "N" ? [[g.x + 1, g.y + g.h], [g.x + 1, g.y]] : s === "S" ? [[g.x + 1, g.y], [g.x + 1, g.y + g.h]] : s === "E" ? [[g.x, g.y + 1], [g.x + g.w, g.y + 1]] : [[g.x + g.w, g.y + 1], [g.x, g.y + 1]];
+}
+function rekkverk(g) { const ut = kanter(g); for (const t of ut) t.hoy = bak_(t.side); return ut; }
+
+function vegg(c, [x1, y1, x2, y2], h, aks, glass = false) {   // veggsegment, h u høyt. Høye vegger: panel med lysbånd og glasstripe. Lave: glassrekkverk.
+  const [ax, ay] = px(x1, y1), [bx, by] = px(x2, y2);
+  if (glass) {
+    flate(c, [[ax, ay], [bx, by], [bx, by - h], [ax, ay - h]], "rgba(140,190,230,.13)");
+    strek(c, [[ax, ay - h], [bx, by - h]], aks, .9, .9); strek(c, [[ax, ay], [bx, by]], F.skrog2, .6, .8);
+    return;
+  }
+  const g = c.createLinearGradient(0, ay - h, 0, ay); g.addColorStop(0, F.vegg2); g.addColorStop(1, F.vegg);
+  flate(c, [[ax, ay], [bx, by], [bx, by - h], [ax, ay - h]], g);
+  flate(c, [[ax, ay - h * .62], [bx, by - h * .62], [bx, by - h * .38], [ax, ay - h * .38]], "rgba(111,168,200,.10)");   // glasstripe
+  strek(c, [[ax, ay - h * .62], [bx, by - h * .62]], aks, .4, .5); strek(c, [[ax, ay - h * .38], [bx, by - h * .38]], aks, .4, .35);
+  const n = Math.round(Math.hypot(x2 - x1, y2 - y1));   // svake sømmer
+  for (let i = 1; i < n; i++) { const [sx, sy] = px(x1 + (x2 - x1) * i / n, y1 + (y2 - y1) * i / n); strek(c, [[sx, sy - h + 2], [sx, sy - 1]], i % 2 ? F.skrog2 : aks, .4, i % 2 ? .35 : .45); }
+  strek(c, [[ax, ay - 2], [bx, by - 2]], NEON, .5, .4);   // magenta stripe langs gulvet
+  const hl = c.createLinearGradient(ax, 0, bx, 0); hl.addColorStop(0, "rgba(255,255,255,0)"); hl.addColorStop(.5, "rgba(255,255,255,.06)"); hl.addColorStop(1, "rgba(255,255,255,0)");
+  flate(c, [[ax, ay], [bx, by], [bx, by - h], [ax, ay - h]], hl);   // svakt høylys over panelet
+  strek(c, [[ax, ay - h], [bx, by - h]], aks, 1, .95);   // lysbånd langs toppen
+  strek(c, [[ax, ay - h + 1.2], [bx, by - h + 1.2]], aks, 2.4, .18);
+  strek(c, [[ax, ay], [bx, by]], F.skrog2, .6, .9);
+}
+function skrog(c, [x1, y1, x2, y2], dybde = SK, aks = NEON) {   // skrog under en frontkant, mørkere nedover, neon-underlys nederst
+  const [ax, ay] = px(x1, y1), [bx, by] = px(x2, y2);
+  const g = c.createLinearGradient(0, ay, 0, ay + dybde); g.addColorStop(0, F.skrog); g.addColorStop(1, F.skrog2);
+  flate(c, [[ax, ay], [bx, by], [bx, by + dybde], [ax, ay + dybde]], g);
+  strek(c, [[ax, ay + dybde - .6], [bx, by + dybde - .6]], aks, .9, .7); strek(c, [[ax, ay + dybde + 1], [bx, by + dybde + 1]], aks, 2.6, .14);
+  strek(c, [[ax, ay + 2], [bx, by + 2]], F.kant, .5, .6);
+  if (dybde > SK) for (let d = 9; d < dybde - 2; d += 6) strek(c, [[ax, ay + d], [bx, by + d]], F.kant, .5, .4);
+}
+function kube(c, x, y, w, d, h, topp, sor, ost) {   // boks med tre flater, lys kant mot lyset og myk skygge under
+  const opp = ([a, b]) => [a, b - h], p = [px(x, y), px(x + w, y), px(x + w, y + d), px(x, y + d)];
+  const [sx, sy] = px(x + w / 2, y + d / 2); ellipse(c, sx + 1, sy + 1, (w + d) * TW * .5, (w + d) * TH * .5, "#000", .3);
+  flate(c, [p[3], p[2], opp(p[2]), opp(p[3])], sor); flate(c, [p[1], p[2], opp(p[2]), opp(p[1])], ost); flate(c, p.map(opp), topp);
+  const q = p.map(opp); strek(c, [q[3], q[0], q[1]], F.tekst, .5, .3);
+}
+function pult(c, x, y) {   // pult med svevende skjermpanel. Skjermflaten farges i det levende laget.
+  kube(c, x + .1, y + .1, .9, .7, 6, F.maskin, F.maskin2, "#232D3C");
+  const [mx, my] = px(x + .5, y + .5);
+  strek(c, [[mx, my - 7], [mx, my - 10]], F.skrog2, 1.2);
+  rund(c, mx - 6, my - 18.5, 12, 8.5, 1.5, F.skrog2); rund(c, mx - 5.2, my - 17.7, 10.4, 6.9, 1.1, front() ? F.skjerm : F.vegg);
+  if (front()) rund(c, mx - 3, my - 6, 6, 1.4, .5, F.topp);
+}
+function reol(c, x, y) {   // serverreol, høy og smal
+  kube(c, x + .2, y + .15, .6, .7, 15, F.vegg2, F.vegg, F.skrog);
+  const [mx, my] = px(x + .5, y + .85); if (front()) for (let i = 0; i < 4; i++) rund(c, mx - 4, my - 4 - i * 3, 5, 1.2, .4, F.skrog2);
+}
+function kasse(c, x, y, h = 5) { kube(c, x + .1, y + .1, .8, .8, h, "#3A4659", "#2A3447", "#232D3C"); const [mx, my] = px(x + .5, y + .9); strek(c, [[mx - 3, my - h + 1], [mx + 3, my - h + 1]], F.skrog2, .8, .8); }
+function tank(c, x, y, aks) {   // glasstank med lysende innhold
+  const [bx, by] = px(x + .5, y + .5), h = 14;
+  const g = c.createLinearGradient(bx - 4, 0, bx + 4, 0); g.addColorStop(0, "#1C3A48"); g.addColorStop(.5, "#2F5C70"); g.addColorStop(1, "#193340");
+  rund(c, bx - 4, by - h, 8, h, 2, g); ellipse(c, bx, by - h, 4, 1.6, "#3A6A80"); ellipse(c, bx, by, 4, 1.6, "#16303C");
+  c.save(); c.globalAlpha = .5; rund(c, bx - 2.5, by - h + 2, 1.2, h - 4, .6, F.tekst); c.restore(); rund(c, bx - .6, by - h + 3, 1.2, h - 6, .6, aks);
+}
+function hoyttaler(c, x, y) { kube(c, x + .1, y + .1, .8, .8, 12, "#1A1F2A", "#141922", "#0F131B"); const [mx, my] = px(x + .5, y + .9); for (const d of [8, 4]) { ellipse(c, mx, my - d, 2, 1.4, "#2A3140"); ellipse(c, mx, my - d, 1, .7, "#0F131B"); } }
+function holobord(c, x, y, aks) {   // Headquarter: bord med hologram over
+  kube(c, x - 1.5, y - .6, 3, 1.4, 7, blandet(aks, "#0E1420", .4), "#1C2533", "#232E3F");
+  const [mx, my] = px(x, y + .1);
+  const g = c.createLinearGradient(0, my - 26, 0, my - 7); g.addColorStop(0, rgba(aks, 0)); g.addColorStop(1, rgba(aks, .35));
+  flate(c, [[mx - 9, my - 26], [mx + 9, my - 26], [mx + 5, my - 7], [mx - 5, my - 7]], g);
+  for (const [r, a] of [[6, .5], [3.5, .35]]) { c.save(); c.globalAlpha = a; c.strokeStyle = aks; c.lineWidth = .5; c.beginPath(); c.ellipse(mx, my - 16, r, r * .45, 0, 0, 7); c.stroke(); c.restore(); }
+  ellipse(c, mx, my - 16, 1.2, 1.2, F.tekst, .9);
+}
+function iVegg(c, r, t, side, fn) {   // tegn på en bakvegg (0 = nord, 3 = vest) ved brøk t, i veggens eget plan: x langs veggen, y nedover fra toppen. Hopper over om veggen ikke er bak nå.
+  if (!bak_(side)) return;
+  const [bx, by] = side === 0 ? px(r.x + r.w * t, r.y) : px(r.x, r.y + r.h * t);
+  let [dx, dy] = side === 0 ? [px(r.x + 1, r.y)[0] - px(r.x, r.y)[0], px(r.x + 1, r.y)[1] - px(r.x, r.y)[1]] : [px(r.x, r.y + 1)[0] - px(r.x, r.y)[0], px(r.x, r.y + 1)[1] - px(r.x, r.y)[1]];
+  const l = Math.hypot(dx, dy); dx /= l; dy /= l; if (dx < 0) { dx = -dx; dy = -dy; }   // leseretning mot høyre på skjermen
+  c.save(); c.transform(dx, dy, 0, 1, bx, by - VH); fn(); c.restore();
+}
+const ANBU = ["......111......", "......111......", ".....11111.....", ".....11111.....", ".....11.11.....", "....111.111....", "....11...11....", "....1....11....", "...11....111...", "...11.....11...", "..11...111111..", "..1.....11111..", ".11........111.", ".11.........11.", "1.............1"];   // merket, pikselisert fra ANBU_Vector1.png
+function logo(c, sx, sy, farge, k = 1) { c.fillStyle = farge; ANBU.forEach((rad, j) => [...rad].forEach((p, i) => { if (p === "1") c.fillRect(sx + (i - 7) * k, sy + j * k, k, k); })); }
+function skjermpanel(c, x, y, w, h, aks) { rund(c, x - w / 2 - .8, y - .8, w + 1.6, h + 1.6, 1.4, F.skrog2); rund(c, x - w / 2, y, w, h, 1, F.rom); strek(c, [[x - w / 2, y], [x + w / 2, y], [x + w / 2, y + h], [x - w / 2, y + h]], aks, .5, .6, true); }
+const PULS = [[-7, 8], [-3, 8], [-2, 5], [-1, 10.5], [0, 6], [1, 8], [7, 8]];   // EKG-kurven på pulsskjermen i Helse
+function veggpynt(c, r, aks) {   // det på veggene som gir rommet personlighet. Alt sitter i veggens plan.
+  const n = r.navn.toLowerCase();
+  iVegg(c, r, .2, 0, () => {   // neonskilt med romnavnet
+    c.font = `600 4.2px "Chakra Petch", sans-serif`; c.textAlign = "center"; c.textBaseline = "alphabetic";
+    const b = c.measureText(r.navn).width + 4; rund(c, -b / 2, 5, b, 6.4, 1, "rgba(8,12,20,.7)");
+    c.save(); c.globalAlpha = .35; c.fillStyle = aks; for (const o of [-.5, .5]) c.fillText(r.navn, o, 9.8); c.restore(); c.fillStyle = aks; c.fillText(r.navn, 0, 9.8);
+  });
+  if (r.side === "hub") iVegg(c, r, .5, 3, () => {   // plakat: «SCARFACE», stilisert silhuett i hvit dress, rød tittel og kloden «The World Is Yours». Ingen ansikt, ikke et portrett.
+    rund(c, -7.5, 1.5, 15, 20.5, 1, "#2A2230"); rund(c, -6.8, 2.2, 13.6, 19, .6, "#0C0A12");
+    const g2 = c.createLinearGradient(0, 2.2, 0, 21.2); g2.addColorStop(0, "#3A0E16"); g2.addColorStop(1, "#0C0A12"); rund(c, -6.8, 2.2, 13.6, 19, .6, g2);
+    c.font = '600 3.1px "Chakra Petch", sans-serif'; c.textAlign = "center"; c.textBaseline = "alphabetic"; c.fillStyle = "#E0302F"; c.fillText("SCARFACE", 0, 6.4); c.save(); c.globalAlpha = .45; c.fillStyle = "#FF6A5C"; c.fillText("SCARFACE", .25, 6.4); c.restore();
+    flate(c, [[-4.8, 21.2], [-4.2, 14.6], [-2.2, 12.6], [2.2, 12.6], [4.2, 14.6], [4.8, 21.2]], "#EEF1F6"); flate(c, [[-.1, 12.8], [1, 13.2], [.5, 17.8], [0, 18.6], [-.5, 17.8], [-1, 13.2]], "#B8141F"); flate(c, [[-2.2, 12.6], [0, 15], [-1.4, 21.2], [-4.8, 21.2], [-4.2, 14.6]], "#D8DCE4"); flate(c, [[2.2, 12.6], [0, 15], [1.4, 21.2], [4.8, 21.2], [4.2, 14.6]], "#D8DCE4");
+    ellipse(c, 0, 10.6, 2.1, 2.5, "#EEF1F6"); rund(c, -3.2, 8.2, 6.4, 1.1, .5, "#EEF1F6"); rund(c, -2, 7.2, 4, 1.4, .6, "#EEF1F6");   // hatt og hode som ren silhuett
+    ellipse(c, 0, 9.4, 3.4, .5, "#EEF1F6"); c.fillStyle = "#EEF1F6"; c.fillRect(-1.5, 12, 3, .8);
+    c.save(); c.strokeStyle = "#E3C25A"; c.lineWidth = .35; c.beginPath(); c.arc(-4.6, 10.2, 1.4, 0, 7); c.moveTo(-6, 10.2); c.lineTo(-3.2, 10.2); c.moveTo(-4.6, 8.8); c.lineTo(-4.6, 11.6); c.stroke(); c.restore();
+    c.font = '600 1.5px "Chakra Petch", sans-serif'; c.fillStyle = "#E3C25A"; c.fillText("THE WORLD IS YOURS", 0, 8.1 + 13.4 - 0.4);
+  });
+  if (r.side === "hub") iVegg(c, r, .5, 0, () => { skjermpanel(c, 0, 3, 20, 10, aks); for (let i = 0; i < 12; i++) { c.fillStyle = i % 3 ? F.hvile : aks; c.globalAlpha = .9; c.fillRect(-9 + hash(i, 3) % 18, 4 + hash(5, i) % 8, .8, .8); } c.globalAlpha = 1; strek(c, [[-8, 8], [8, 8]], aks, .4, .5); strek(c, [[0, 4], [0, 12]], aks, .4, .5); });   // stjernekart
+  if (n === "studio") iVegg(c, r, .5, 3, () => { rund(c, -9.5, 2, 19, 18, 1.5, F.skrog2); logo(c, 0, 3.5, F.tekst); c.save(); c.globalAlpha = .3; logo(c, 0, 3.5, aks); c.restore(); });   // ANBU-merket
+  if (n === "verksted") { iVegg(c, r, .55, 0, () => { rund(c, -12, 3, 24, 12, 1, "#1B2230"); for (let i = 0; i < 9; i++) for (let j = 0; j < 3; j++) ellipse(c, -10 + i * 2.5, 5.5 + j * 3.6, .25, .25, F.skrog2); for (const [dx, h2] of [[-9, 6], [-6, 5], [-3, 7], [0, 5], [3, 6], [6, 4]]) rund(c, dx, 4, 1.1, h2, .4, F.staal); rund(c, -10, 11, 4, 1.8, .5, aks); rund(c, -4, 11.5, 3, 1.2, .5, "#B5402F"); rund(c, 1, 11, 5, 1.6, .5, F.staal); rund(c, 8, 4.5, 2.4, 5, .6, aks); });   // verktøyvegg på nordveggen
+    iVegg(c, r, .85, 0, () => { rund(c, -6, 3, 12, 11, 1, "#1B2230"); for (let j = 0; j < 3; j++) { rund(c, -5, 5 + j * 3.2, 10, .7, .3, F.staal); for (let i = 0; i < 4; i++) rund(c, -4.4 + i * 2.4, 2.8 + j * 3.2, 1.8, 2.2, .4, i % 2 ? "#C58A2B" : F.skrog2); } }); }   // delehyller
+  if (n === "verksted") iVegg(c, r, .5, 3, () => { for (const [dx, h] of [[-4, 6], [-1, 5], [2, 6]]) rund(c, dx, 5, 1, h, .4, F.staal); rund(c, -5, 4, 3, 1.6, .5, aks); rund(c, 1, 4, 3, 1.2, .5, aks); });   // verktøyvegg
+  if (n === "lab") iVegg(c, r, .52, 0, () => skjermpanel(c, 0, 3, 16, 10, aks));   // forskningsskjerm
+  if (n === "verksted") iVegg(c, r, .25, 3, () => skjermpanel(c, 0, 3, 14, 9, aks));   // systemmonitor
+  if (n === "lab") iVegg(c, r, .5, 3, () => { for (const dy of [7, 12]) { rund(c, -5, dy, 10, .8, .3, F.staal); [F.hvile, aks, F.tekst, aks].forEach((f, i) => rund(c, -4 + i * 3, dy - 2.4, 1.2, 2.4, .4, f)); } });   // hyller med kolber
+  if (n === "wallstreet" || n === "marked") iVegg(c, r, .5, 0, () => { skjermpanel(c, 0, 3, 16, 9, aks); [3, 5, 4, 6, 2, 5, 7].forEach((h, i) => rund(c, -6 + i * 2, 11 - h, 1.2, h, .3, i % 3 === 2 ? F.rod : aks)); });   // kurstavle
+  if (n === "helse") { iVegg(c, r, .5, 0, () => { skjermpanel(c, 0, 3, 16, 9, aks); strek(c, PULS, aks, .6, .9); });   // pulsskjerm
+    iVegg(c, r, .5, 3, () => { rund(c, -6.5, 11.5, 13, .8, .3, F.staal); for (let i = 0; i < 4; i++) { const xx = -4.5 + i * 3, hh = 2 + i * .3; strek(c, [[xx - .8, 10.4], [xx + .8, 10.4]], F.staal, .5); rund(c, xx - 1.4, 10.4 - hh / 2, .6, hh, .3, "#1A2230"); rund(c, xx + .8, 10.4 - hh / 2, .6, hh, .3, "#1A2230"); } }); }   // manualstativ
+  if (n === "radar" || n === "utkikk") { iVegg(c, r, .5, 0, () => { skjermpanel(c, 0, 3, 12, 12, aks); for (const rr of [2, 4]) { c.save(); c.globalAlpha = .6; c.strokeStyle = aks; c.lineWidth = .4; c.beginPath(); c.arc(0, 9, rr, 0, 7); c.stroke(); c.restore(); } strek(c, [[0, 9], [4, 6]], aks, .6, .9); ellipse(c, 2, 7, .6, .6, F.tekst); });
+    iVegg(c, r, .5, 3, () => { ellipse(c, 0, 8, 5, 5, aks); ellipse(c, 0, 8, 4, 4, F.rom); ellipse(c, -2, 7, .5, .5, F.tekst); ellipse(c, 1, 9.5, .4, .4, F.tekst); }); }   // radarskjerm og kuvindu
+}
+function mobler(c, r) {   // hvert rom har sin egen innredning, langs fremre halvdel så figurene går fritt
+  const { x, y, w, h } = r, n = r.navn.toLowerCase(), fy = y + h - 1.9, aks = stil(r);
+  if (r.side === "hub") holobord(c, x + w / 2, fy, aks);
+  else if (n === "verksted") verksted(c, r, fy, aks);
+  else if (n === "lab") { tank(c, x + 1, fy, aks); kube(c, x + w - 3.4, fy + .1, 2, .7, 5, F.maskin, F.maskin2, "#232D3C"); }
+  else if (n === "studio") { hoyttaler(c, x + 1, fy); hoyttaler(c, x + w - 2, fy); kube(c, x + w / 2 - 1, fy + .1, 2, .7, 4, F.maskin, F.maskin2, "#232D3C"); kube(c, x + 2.2, fy + .1, .7, .7, 6, aks, "#2A2440", "#1E1A30"); }
+  else if (n === "wallstreet" || n === "marked") { kasse(c, x + 1, fy); kasse(c, x + 2, fy); kasse(c, x + 1.5, fy - .05, 10); kube(c, x + w - 4, fy + .1, 2.4, .7, 6, F.maskin, F.maskin2, "#232D3C"); const [mx, my] = px(x + w - 2.8, fy + .1); strek(c, [[mx - 6, my - 6], [mx + 6, my - 6]], aks, .8, .9); }
+  else if (n === "helse") {   // benkpress med stang og tredemølle
+    kube(c, x + .8, fy + .3, 1.6, .5, 2.5, F.maskin, F.maskin2, "#232D3C");
+    const [ax, ay] = px(x + .9, fy + .55), [bx, by] = px(x + 2.3, fy + .55), ex = (bx - ax) * .25, ey = (by - ay) * .25;
+    strek(c, [[ax, ay], [ax, ay - 7]], F.staal, .8); strek(c, [[bx, by], [bx, by - 7]], F.staal, .8); strek(c, [[ax - ex, ay - 7 - ey], [bx + ex, by - 7 + ey]], F.tekst, .7);
+    for (const [qx, qy] of [[ax - ex, ay - 7 - ey], [bx + ex, by - 7 + ey]]) rund(c, qx - .9, qy - 3, 1.8, 6, .6, "#1A2230");
+    kube(c, x + w - 2.6, fy + .1, 1.8, .9, 1.2, "#232D3C", F.maskin2, F.skrog);
+    const [tx, ty] = px(x + w - 1, fy + .4); strek(c, [[tx, ty - 1], [tx, ty - 9]], F.staal, .8); rund(c, tx - 3, ty - 11.5, 6, 2.4, .6, F.skrog2); strek(c, [[tx - 2, ty - 10.3], [tx + 2, ty - 10.3]], aks, .5, .8);
+  }
+  else if (n === "radar" || n === "utkikk") { kube(c, x + 1.2, fy + .1, .6, .6, 9, F.vegg2, F.vegg, F.skrog); const [mx, my] = px(x + 1.5, fy + .4); strek(c, [[mx, my - 9], [mx + 6, my - 16]], F.skrog2, 2.2); strek(c, [[mx, my - 9], [mx + 6, my - 16]], F.staal, 1); ellipse(c, mx + 6, my - 16, .8, .8, aks); }
+}
+function antenne(c, x, y) { const [mx, my] = px(x, y), sy = my - VH; strek(c, [[mx, sy], [mx, sy - 16]], F.topp, 1); c.save(); c.strokeStyle = F.vegg2; c.lineWidth = 1.2; c.beginPath(); c.arc(mx, sy - 19, 3.5, 0.2, 2.9); c.stroke(); c.restore(); ellipse(c, mx, sy - 17.5, .9, .9, F.topp); }
+function solpanel(c, x, y) {   // vinge på stag over bakveggen
+  const opp = VH + 6, [mx, my] = px(x, y); strek(c, [[mx, my - 4], [mx, my - opp]], F.topp, 1.2);
+  c.save(); c.translate(0, -opp - 1);
+  const p = [px(x - .2, y - .6), px(x + 3.4, y - .6), px(x + 3.4, y + 1.2), px(x - .2, y + 1.2)];
+  const g = c.createLinearGradient(p[0][0], p[0][1], p[2][0], p[2][1]); g.addColorStop(0, "#2A4270"); g.addColorStop(1, "#16243E"); flate(c, p, g); strek(c, p, F.topp, .5, .8, true);
+  for (let i = 1; i < 3; i++) strek(c, [px(x - .2 + 1.2 * i, y - .6), px(x - .2 + 1.2 * i, y + 1.2)], F.skrog2, .4, .7);
+  strek(c, [px(x - .2, y + .3), px(x + 3.4, y + .3)], F.skrog2, .4, .7); c.restore();
+}
+function lampe(c, r, farge, alfa = 1) {   // lampe på den veggen som vender bakover nå
+  const s = (4 - rot) % 4, { x, y, w, h } = r;
+  const [mx, my] = s === 0 ? px(x + w - 3.5, y) : s === 1 ? px(x + w, y + h - 2.5) : s === 2 ? px(x + 2.5, y + h) : px(x, y + 2.5);
+  c.save(); c.globalAlpha = alfa; rund(c, mx - 2.5, my - VH + 6, 5, 1.6, .6, farge); c.restore();
+  return [mx, my - VH + 7];
+}
+function verksted(c, r, fy, aks) {   // Verksted: arbeidsbenk med skrustikke, verktøyskap, boremaskin, 3D-printer, delehyller og kasser. Plass til at alle jobber.
+  const { x, y, w, h } = r, ry = fy - 2.2;
+  kube(c, x + 1, fy, 4.4, .8, 4, "#8A6A45", "#5E4630", "#4A3724");   // lang arbeidsbenk
+  const [vx, vy] = px(x + 1.8, fy + .45); rund(c, vx - 1.4, vy - 7.2, 2.8, 2.2, .5, F.staal); strek(c, [[vx, vy - 7.2], [vx, vy - 9]], F.staal, .8);   // skrustikke
+  const [sx, sy] = px(x + 3.6, fy + .45); strek(c, [[sx - 3, sy - 4.8], [sx + 3, sy - 4.8]], F.tekst, .5, .8); rund(c, sx - 1.2, sy - 7, 2.4, 2, .5, aks);   // måleband og verktøy på benken
+  kube(c, x + 6.2, fy, 1.2, .9, 7, "#B5402F", "#7C2B20", "#5E2018");   // rullende verktøyskap
+  const [kx, ky] = px(x + 6.8, fy + .95); for (let i = 0; i < 3; i++) strek(c, [[kx - 2.6, ky - 2 - i * 2.2], [kx + 2.6, ky - 2 - i * 2.2]], "#E8C8C0", .5, .7);
+  kube(c, x + w - 8.4, fy + .1, .8, .8, 12, F.vegg2, F.vegg, F.skrog);   // boremaskin: søyle, bord og hode
+  const [bx, by] = px(x + w - 8, fy + .5); rund(c, bx - 3, by - 6, 6, 1.4, .5, F.staal); rund(c, bx - 2.4, by - 15, 4.8, 3.6, 1, F.skrog2); strek(c, [[bx, by - 11.4], [bx, by - 7.4]], F.tekst, .6, .9);
+  kube(c, x + w - 6, fy, 1.8, 1.4, 4, "#3A4659", "#2A3447", "#232D3C");   // 3D-printer med glødende bygg
+  const [px3, py3] = px(x + w - 5.1, fy + .7); strek(c, [[px3 - 3.4, py3 - 12], [px3 + 3.4, py3 - 12], [px3 + 3.4, py3 - 5], [px3 - 3.4, py3 - 5]], aks, .5, .8, true); rund(c, px3 - 2, py3 - 8, 4, 3, .6, aks); hoylys(c, px3 - 1.4, py3 - 7.6, 1.4, .8, .6);
+  kasse(c, x + w - 3.4, fy, 5); kasse(c, x + w - 2.3, fy + .1, 8); kasse(c, x + w - 3.4, fy + 1.1, 3);   // stablede kasser
+  for (let i = 0; i < 3; i++) kube(c, x + w / 2 - 2 + i * 1.5, ry + 1.6, .9, .9, 2.2, "#C58A2B", "#8E6320", "#6E4C18");   // delebokser midt i rommet
+  for (const sx2 of [x + 8.4, x + w - 10.6]) { kube(c, sx2, ry, .5, .5, 4, "#2A3140", "#1C2230", "#141922"); }
+  strek(c, [px(x + 1.2, y + h - .6), px(x + w - 1.2, y + h - .6)], "#E3C25A", 1.2, .55);   // gul sikkerhetsstripe langs fremkanten
+}
+function tegnRom(r) {
+  const { x, y, w, h } = r, seg = segmenter(r), aks = aksent(btx, r), navn = r.navn.toLowerCase(), hub = r.side === "hub";
+  if (navn === "radar" || navn === "utkikk") antenne(btx, x + 1, y);
+  if (hub) solpanel(btx, x - 4, y - .2);   // shortcut: vingen står nordvest for Headquarter og krasjer med en eventuell base i vest
+  for (const s of seg) if (!s.hoy) skrog(btx, s.p, hub ? SK + HEV : SK, aks);
+  for (const s of seg) if (s.hoy) vegg(btx, s.p, VH, aks);
+  // gulvet: én flate med gradient, svakt rutenett, mørkere langs bakveggene
+  const hj = [[x + 1, y], [x + w - 1, y], [x + w, y + 1], [x + w, y + h - 1], [x + w - 1, y + h], [x + 1, y + h], [x, y + h - 1], [x, y + 1]].map(([a, b]) => px(a, b));
+  const [cx, cy] = px(x + w / 2, y + h / 2), g = btx.createLinearGradient(cx, cy - 20, cx, cy + 20); g.addColorStop(0, blandet(F.gulv2, stil(r), .1)); g.addColorStop(1, blandet(F.gulv, stil(r), .14));
+  flate(btx, hj, g);
+  for (let i = 1; i < w; i++) strek(btx, [px(x + i, y), px(x + i, y + h)], aks, .3, .09);
+  for (let j = 1; j < h; j++) strek(btx, [px(x, y + j), px(x + w, y + j)], aks, .3, .09);
+  strek(btx, [[x + 1.3, y + .5], [x + w - 1.3, y + .5], [x + w - .5, y + 1.3], [x + w - .5, y + h - 1.3], [x + w - 1.3, y + h - .5], [x + 1.3, y + h - .5], [x + .5, y + h - 1.3], [x + .5, y + 1.3]].map(([a, b]) => px(a, b)), aks, .4, .3, true);   // neonkant i gulvet
+  for (const sd of [0, 3]) if (bak_(sd)) flate(btx, sd === 0 ? [px(x, y), px(x + w, y), px(x + w, y + 1.4), px(x, y + 1.4)] : [px(x, y), px(x, y + h), px(x + 1.4, y + h), px(x + 1.4, y)], "rgba(8,12,20,.32)");
+  if (hub) { const pal = alleFarger(); for (let i = 1; i < w - 1; i++) for (let j = 1; j < h - 1; j++) { if ((i + j) % 2) continue; const fg = pal[(i * 3 + j) % pal.length]; flate(btx, [px(x + i, y + j), px(x + i + 1, y + j), px(x + i + 1, y + j + 1), px(x + i, y + j + 1)], rgba(fg, .09)); }   // fargede felt i gulvet, én farge per base
+    pal.forEach((fg, i) => { const xx = x + 1.5 + i * (w - 3) / Math.max(1, pal.length - 1); strek(btx, [px(xx, y + .8), px(xx, y + h - .8)], fg, .6, .25); }); }
+  veggpynt(btx, r, aks);
+  for (const a of r.agenter) pult(btx, a.pult[0] - .5, y);
+  reol(btx, x + w - 2, y);
+  mobler(btx, r);
+  lampe(btx, r, F.skjerm);
+  for (const s of seg) if (!s.hoy) { vegg(btx, s.p, LH, aks, true); const [ax, ay] = px(s.p[0], s.p[1]), [bx, by] = px(s.p[2], s.p[3]); strek(btx, [[ax, ay - .6], [bx, by - .6]], aks, 1.6, .12); }   // lyset fra rekkverket speiles svakt i gulvet
+}
+function tegnGang(g, r) {   // korridor: gulv, retningspiler fra Headquarter og ut
+  const aks = stil(r), hj = [[g.x, g.y], [g.x + g.w, g.y], [g.x + g.w, g.y + g.h], [g.x, g.y + g.h]].map(([a, b]) => px(a, b));
+  flate(btx, hj, F.korridor);
+  const [[ax, ay], [bx, by]] = stubbEnder(r), n = Math.round(Math.hypot(bx - ax, by - ay)), dx = (bx - ax) / n, dy = (by - ay) / n;
+  for (let i = 1; i < n; i += 1.5) { const cx = ax + dx * i, cy = ay + dy * i; strek(btx, [px(cx - dx * .15 - dy * .3, cy - dy * .15 + dx * .3), px(cx + dx * .25, cy + dy * .25), px(cx - dx * .15 + dy * .3, cy - dy * .15 - dx * .3)], NEON, .6, .6); }
+  strek(btx, [hj[0], hj[1]], aks, .5, .4); strek(btx, [hj[3], hj[2]], aks, .5, .4);
+}
+function tegnBak() {   // hele det statiske laget, i skala Sb
+  Sb = Math.min(7, S); bak.width = Math.ceil(enhet[0] * Sb); bak.height = Math.ceil(enhet[1] * Sb);
+  btx.setTransform(Sb, 0, 0, Sb, 0, 0); btx.clearRect(0, 0, enhet[0], enhet[1]);
+  const deler = [];
+  for (const r of rommene) { if (r.stubb) tegnGang(r.stubb, r); deler.push({ d: dyp(r.x + r.w / 2, r.y + r.h / 2), tegn: () => tegnRom(r) }); }
+  for (let k = 1; k < rommene.length; k++) for (const t of rekkverk(rommene[k].stubb)) deler.push({ d: dyp((t.p[0] + t.p[2]) / 2, (t.p[1] + t.p[3]) / 2) + (t.hoy ? -.5 : .5), tegn: () => { if (!t.hoy) skrog(btx, t.p); vegg(btx, t.p, 3, stil(rommene[k]), true); } });
+  deler.sort((a, b) => a.d - b.d).forEach(d => d.tegn());
+}
+
+/* ---------- figurene: runde roboter, tegnet med former. Størrelse og utseende per agent. ---------- */
+const DRAKTER = {
+  claude: { stor: true, a: "#C9402B", b: "#7E2418", h: F.gull, type: "ironman" },
+  hermes: { stor: true, k: 1.15, a: "#EFE4CC", b: "#D9C9A8", h: "#1E1A2A", type: "hermes" },
+  speider: { a: "#5BA58F", b: "#2F6B5B", h: "#DDE8E3", pynt: "antenne" },
+  student: { a: "#7FA9D6", b: "#3F6A9A", h: "#1A1F2A", pynt: "hatt" },
+  coder: { a: "#3A4252", b: "#262D3A", h: "#9FB3C8", pynt: "programmerer" },
+  forsker: { a: "#EEF1F6", b: "#B9C2CE", h: "#2E7F86", pynt: "frakk" },
+  megler: { a: "#3F5A8F", b: "#263A5E", h: "#E3C25A", pynt: "slips" },
+  shop: { a: "#5DAA7A", b: "#2F6B49", h: "#F4F1EA", pynt: "dollar" },
+  hacker: { a: "#1E1B28", b: "#100E16", h: "#F2EEE6", pynt: "anonymous" },
+  drift: { a: "#8C8A5A", b: "#5A5838", h: "#E3C25A", pynt: "hjelm" },
+  anbu: { a: "#242A36", b: "#121620", h: "#EEF1F6", pynt: "hodetelefoner" },
+  vakt: { a: "#3E6FB8", b: "#22406E", h: "#F4F6FA", pynt: "hvithatt" },
+  trener: { a: "#D9553F", b: "#7E2E1E", h: "#F4F1EA", pynt: "muskler" },
+  skole: { a: "#8B5E3C", b: "#4A2F1B", h: "#F4F1EA", pynt: "hjerne" },
+  reise: { a: "#E2762B", b: "#8F3F14", h: "#F4F1EA", pynt: "pilot" },
+};
+const PYNT = { antenne: "speider", hatt: "student", programmerer: "coder", frakk: "forsker", slips: "megler", dollar: "shop", anonymous: "hacker", hjelm: "drift", hodetelefoner: "anbu", muskler: "trener", hvithatt: "vakt", pilot: "reise", hjerne: "skole", laerer: "skole", kaptein: "reise", romkaptein: "reise", xwing: "reise", ironman: "claude", hermes: "hermes" };
+function draktFor(a) {   // utseende: `drakt:` og `farge:` i agentfila vinner, ellers etter navnet, ellers standardrobot
+  const navn = typeof a === "string" ? a : a.navn, agent = typeof a === "string" ? {} : a;
+  let d = DRAKTER[(agent.drakt && PYNT[agent.drakt.toLowerCase()]) || navn.toLowerCase()] || { a: F.kropp, b: F.staal, h: F.hode };
+  if (/^#[0-9a-f]{6}$/i.test(agent.farge || "")) d = { ...d, a: agent.farge, b: blandet(agent.farge, "#000000", .4) };
+  return d;
+}
+
+const kontrast = hex => {   // gjør fargen sterk: høy metning og lys, men samme tone
+  let [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255); const mx = Math.max(r, g, b), mn = Math.min(r, g, b); let h = 0, l = (mx + mn) / 2, sa = mx === mn ? 0 : (mx - mn) / (1 - Math.abs(2 * l - 1));
+  if (mx !== mn) { const d = mx - mn; h = mx === r ? ((g - b) / d + (g < b ? 6 : 0)) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; }
+  sa = Math.max(sa, .9); l = Math.min(.66, Math.max(.58, l));
+  const q = (n) => { const k = (n + h / 30) % 12, a2 = sa * Math.min(l, 1 - l); return Math.round(255 * (l - a2 * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); };
+  return "#" + [q(0), q(8), q(4)].map(v => v.toString(16).padStart(2, "0")).join("");
+};
+const agentFarge = a => kontrast(draktFor(a).a);   // sterk, lys agentfarge til lyspakker og skjermer. Samme tone som drakten.   // lysnet agentfarge så mørke drakter synes som lyspakker
+function skjermTema(c, navn, x, y, w, h, t, f, stille) {   // hver agent har sitt tema på pultskjermen. Tegnes i skjermkoordinater, klippet til skjermen.
+  const n = navn.toLowerCase(), u = stille ? 0 : t / 1000, bl = (i, v) => (Math.floor(u * 2 + i) % v === 0);
+  rund(c, x, y, w, h, 1, "#0A1020");
+  c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip();
+  if (n === "hermes") { for (let i = 0; i < 3; i++) { const l = i % 2 === 0, bw = 3.6 + (i * 1.7) % 3; rund(c, l ? x + .8 : x + w - bw - .8, y + 1 + i * 1.9, bw, 1.4, .6, l ? f : "#FFFFFF"); } for (let i = 0; i < 3; i++) ellipse(c, x + w - 2.8 + i * .9, y + h - .9, .3, .3, f, .4 + .6 * (Math.sin(u * 5 + i) > 0 ? 1 : 0)); }
+  else if (n === "claude") { const L = [[1, 3.6], [2, 5.2], [2, 3], [1, 4.4], [2, 5.6]]; L.forEach(([ind, len], i) => rund(c, x + .8 + ind * .9, y + .8 + i * 1.2, len, .6, .3, i % 2 ? f : "#FFB04F")); if (bl(0, 2)) rund(c, x + 5.2, y + 5.4, .7, 1, .1, "#FFFFFF"); }
+  else if (n === "vakt") { const g = [[x + 2.6, y + 1], [x + 5.2, y + 1.8], [x + 5.2, y + 4], [x + 2.6, y + 6], [x, y + 4], [x, y + 1.8]]; flate(c, [[x + 2.4, y + 1], [x + 4.6, y + 1.8], [x + 4.6, y + 3.8], [x + 2.4, y + 5.4], [x + .2, y + 3.8], [x + .2, y + 1.8]], rgba(f, .5)); strek(c, [[x + 1.2, y + 3.4], [x + 2.2, y + 4.2], [x + 3.8, y + 2.4]], "#FFFFFF", .5, .9); for (let i = 0; i < 4; i++) ellipse(c, x + 6.4 + (i % 2) * 1.8, y + 1.4 + i * 1.3, .4, .4, bl(i, 3) ? f : "#FF5C5C"); strek(c, [[x, y + (u * 4) % h], [x + w, y + (u * 4) % h]], f, .35, .5); }
+  else if (n === "speider") { c.strokeStyle = f; c.lineWidth = .6; c.beginPath(); c.arc(x + 3, y + 3, 1.9, 0, 7); c.stroke(); strek(c, [[x + 4.4, y + 4.4], [x + 5.6, y + 5.6]], f, .8); for (let i = 0; i < 3; i++) rund(c, x + 6.3, y + 1.2 + i * 1.8, 3.4 - i * .6, .6, .3, i === (Math.floor(u) % 3) ? "#FFFFFF" : f); }
+  else if (n === "reise") { strek(c, [[x + .8, y + 5.4], [x + 3, y + 3.2], [x + 5, y + 4.2], [x + 7, y + 1.6], [x + 9.4, y + 2.4]], f, .6, .9); for (const [px_, py_] of [[.8, 5.4], [3, 3.2], [5, 4.2], [7, 1.6], [9.4, 2.4]]) ellipse(c, x + px_, y + py_, .5, .5, "#FFFFFF"); const k = (u * .4) % 1, sx = x + .8 + 8.6 * k; ellipse(c, sx, y + 3.5, .8, .6, "#FFB04F"); rund(c, x + .6, y + h - 1.3, 2.2, .7, .3, f); }
+  else if (n === "skole") { rund(c, x + .8, y + 1.2, 4, 4.6, .4, "#F4F1EA", .9); rund(c, x + 5.4, y + 1.2, 4, 4.6, .4, "#F4F1EA", .9); for (let i = 0; i < 4; i++) { strek(c, [[x + 1.4, y + 2 + i], [x + 4.2, y + 2 + i]], "#8B5E3C", .35, .8); strek(c, [[x + 6, y + 2 + i], [x + (i === 1 ? 7.4 : 8.8), y + 2 + i]], "#8B5E3C", .35, .8); } ellipse(c, x + 8.4, y + 5.2, .9, .9, "#EE97B2"); }
+  else if (n === "drift") { for (let i = 0; i < 4; i++) { const v = 1.6 + 3.4 * Math.abs(Math.sin(u * .9 + i * 1.7)); rund(c, x + 1 + i * 2.3, y + h - 1 - v, 1.5, v, .3, i === 2 ? "#E3C25A" : f); } ellipse(c, x + w - 1, y + 1, .5, .5, "#6FE08A"); }
+  else if (n === "anbu") { for (let i = 0; i < 7; i++) { const v = 1 + 4.6 * Math.abs(Math.sin(u * 3.2 + i * 1.3)); rund(c, x + .9 + i * 1.3, y + h - .8 - v, .9, v, .3, i % 2 ? f : "#FF4FD8"); } }
+  else if (n === "megler") { [[3, 5, 2, 4], [2, 4, 1, 3], [4, 2, 1, 3], [2, 1, 1, 3.5], [1, 0, 1, 2.5]].forEach(([o, c2, wk, hk], i) => { const kx = x + 1 + i * 1.9, ky = y + 1 + o, up = i % 2 === 0; strek(c, [[kx + .5, ky - .5], [kx + .5, ky + hk + .5]], "#FFFFFF", .3, .7); rund(c, kx, ky, 1, hk, .2, up ? "#6FE08A" : "#FF5C5C"); }); }
+  else if (n === "trener") { const P = [[0, 4], [1.4, 4], [2, 1.6], [2.8, 6.2], [3.4, 3], [4, 4], [5.8, 4], [6.4, 2], [7, 5.4], [7.6, 4], [9.6, 4]]; strek(c, P.map(([a, b]) => [x + .4 + a, y + 1 + b * .6]), f, .6, .9); const k = (u * .8) % 1, kx = x + .4 + 9.6 * k; ellipse(c, kx, y + 1 + 4 * .6, .7, .7, "#FFFFFF"); }
+  else if (n === "plutus") { ellipse(c, x + 2.4, y + 3.4, 1.6, 1.6, "#E3C25A"); strek(c, [[x + 2.4, y + 2.6], [x + 2.4, y + 4.2]], "#8E6320", .4); strek(c, [[x + 4.6, y + 5.4], [x + 6, y + 4.2], [x + 7.2, y + 4.8], [x + 9.4, y + 1.6]], "#6FE08A", .6, .9); }
+  else if (n === "shop") { for (let i = 0; i < 3; i++) { rund(c, x + .8 + i * 3.1, y + 1.4 + (i % 2) * 1.2, 2.6, 3, .5, i === 1 ? f : "#F4F1EA"); strek(c, [[x + 1.4 + i * 3.1, y + 3 + (i % 2) * 1.2], [x + 2.8 + i * 3.1, y + 3 + (i % 2) * 1.2]], "#2F6B49", .4); } rund(c, x + .8, y + 5.6, 4, .7, .3, f); }
+  else if (n === "hacker") { for (let i = 0; i < 8; i++) { const yy = (u * (2 + i % 3) + i * 1.7) % (h + 2); ellipse(c, x + .8 + i * 1.2, y + yy, .35, .55, i % 3 ? "#35F28A" : "#B8FFD6", .9); ellipse(c, x + .8 + i * 1.2, y + yy - 1.3, .3, .5, "#35F28A", .45); } }
+  else { for (let i = 0; i < 4; i++) rund(c, x + .8, y + 1 + i * 1.5, 3 + (i * 2.3) % 5, .6, .3, f); }
+  c.restore();
+}
+function lysFor(a) { return a.jobber ? F.rav : a.status === "feil" ? F.rod : a.status === "venter" ? F.staal : F.hvile; }
+function figur(c, f, t) {   // tegnes med føttene i (0,0) etter translate
+  const a = f.agent, d = draktFor(a), [X, Y] = px(f.x, f.y), bilde = bilder[a.navn], k = bilde ? 1.25 : d.k || (d.stor ? 1.5 : 1), lys = lysFor(a), venter = a.status === "venter";
+  const rask = a.navn.toLowerCase() === "hermes", sv = f.gaar && !stille ? Math.sin(t / (rask ? 55 : 110)) * 1.6 : 0;
+  c.save(); c.translate(X, Y);
+  if (a.jobber) { const p = .8 + .2 * Math.sin(t / 260);   // blå aura som stråler: bred glød, kjerne, ring på gulvet og roterende stråler
+    glod(c, 0, -14 * k, 40 * k, "#2F8CFF", .55 * p, false); glod(c, 0, -14 * k, 28 * k, "#4FA8FF", 1 * p, false); glod(c, 0, -14 * k, 15 * k, "#BFE4FF", .9 * p, false); glod(c, 0, 0, 24 * k, "#4FA8FF", 1 * p);
+    c.save(); c.globalAlpha = .95 * p; c.strokeStyle = "#7FC4FF"; c.lineWidth = 1.2; c.beginPath(); c.ellipse(0, 0, 10 * k, 4 * k, 0, 0, 7); c.stroke(); const ru = (t / 900) % 1; c.globalAlpha = (1 - ru) * .8; c.beginPath(); c.ellipse(0, 0, (6 + 20 * ru) * k, (2.4 + 8 * ru) * k, 0, 0, 7); c.stroke(); c.restore();
+    if (!stille) { c.save(); c.translate(0, -14 * k); c.globalAlpha = .55 * p; c.strokeStyle = "#BFE4FF"; c.lineWidth = .9; c.lineCap = "round"; for (let q = 0; q < 10; q++) { const v = t / 2400 + q * Math.PI / 5, l0 = 17 * k, l1 = (24 + 7 * Math.sin(t / 200 + q * 2)) * k; c.beginPath(); c.moveTo(Math.cos(v) * l0, Math.sin(v) * l0 * .8); c.lineTo(Math.cos(v) * l1, Math.sin(v) * l1 * .8); c.stroke(); } c.restore(); }
+  }
+  ellipse(c, 0, 0, 6 * k, 2.4 * k, "#000", .45);
+  c.scale(k, k); if (venter) c.globalAlpha = .4;
+  if (bilde) bildefigur(c, bilde, d, lys, sv);
+  else if (d.type === "hermes") hermes(c, d, lys, sv);
+  else if (d.type === "ironman") ironman(c, d, lys, sv, t);
+  else robot(c, d, a, lys, sv);
+  c.restore();
+  const bred = 14 * k, hoyde = (bilde ? 46 : d.type === "hermes" ? 39 : 33) * k;
+  treff.push({ navn: a.navn, vis: a.kallenavn || a.navn, x: X - bred / 2, y: Y - hoyde, w: bred, h: hoyde + 2, X, Y, venter });
+  if (a.navn === valgt || a.navn === fokus) strek(c, [[X - bred / 2, Y - hoyde], [X + bred / 2, Y - hoyde], [X + bred / 2, Y + 2], [X - bred / 2, Y + 2]], F.tekst, .7, .9, true);
+}
+function stjerne(c, x, y, r, farge) {   // Claude-stjernen: åtte stråler med runde ender
+  c.save(); c.strokeStyle = farge; c.lineWidth = r * .36; c.lineCap = "round"; c.beginPath();
+  for (let i = 0; i < 8; i++) { const v = i * Math.PI / 4, l = i % 2 ? r * .72 : r; c.moveTo(x + Math.cos(v) * r * .22, y + Math.sin(v) * r * .22); c.lineTo(x + Math.cos(v) * l, y + Math.sin(v) * l); }
+  c.stroke(); c.restore();
+}
+function hoylys(c, x, y, w, h, r) { c.save(); c.globalAlpha = .22; rund(c, x, y, w, h, r, "#FFFFFF"); c.restore(); }
+function bildefigur(c, im, d, lys, sv) {   // illustrert byste fra vaulten over en tegnet underkropp, vinger bak hodet, tilstandslys som brosje
+  const H = 30, w = H * im.width / im.height;
+  rund(c, -3.6, -8 + Math.max(0, sv), 2.8, 8 - Math.max(0, sv), 1.1, d.b); rund(c, 1, -8 + Math.max(0, -sv), 2.8, 8 - Math.max(0, -sv), 1.1, d.b);   // bein
+  const g = c.createLinearGradient(-7, -20, 7, -8); g.addColorStop(0, blandet(d.a, "#FFFFFF", .1)); g.addColorStop(1, d.b);
+  c.beginPath(); c.moveTo(-5, -19); c.lineTo(5, -19); c.lineTo(7, -8); c.lineTo(-7, -8); c.closePath(); c.fillStyle = g; c.fill();   // skjørt
+  if (d.type === "hermes") for (const sg of [-1, 1]) { c.beginPath(); c.moveTo(sg * (w * .36), -H - 12); c.quadraticCurveTo(sg * (w * .36 + 9), -H - 17, sg * (w * .36 + 8), -H - 11); c.quadraticCurveTo(sg * (w * .36 + 6), -H - 10.6, sg * (w * .36), -H - 9.5); c.closePath(); c.fillStyle = F.gull; c.fill(); }   // vinger
+  c.drawImage(im, -w / 2, -16 - H, w, H);
+  glod(c, 0, -14, 4.5, lys, .55, false); ellipse(c, 0, -14, 1.5, 1.5, lys); ellipse(c, 0, -14, .6, .6, "#FFFFFF", .85);   // brosje = tilstand
+}
+function robot(c, d, a, lys, sv) {   // standard robot: bein, armer, kropp, hode, pynt etter jobben
+  rund(c, -4.2, -8 + Math.max(0, sv), 3.2, 8 - Math.max(0, sv), 1.2, d.b); rund(c, 1, -8 + Math.max(0, -sv), 3.2, 8 - Math.max(0, -sv), 1.2, d.b);
+  rund(c, -8.2, -16.5 - Math.max(0, -sv) * .4, 2.4, 8, 1.1, d.b); rund(c, 5.8, -16.5 - Math.max(0, sv) * .4, 2.4, 8, 1.1, d.b);   // armer
+  const g = c.createLinearGradient(-6, -18, 6, -8); g.addColorStop(0, blandet(d.a, "#FFFFFF", .18)); g.addColorStop(1, d.b);
+  rund(c, -5.8, -18, 11.6, 10.5, 2.6, g); hoylys(c, -4.8, -17, 3, 6, 1.4);
+  rund(c, -7.6, -18, 3, 4.5, 1.2, d.b); rund(c, 4.6, -18, 3, 4.5, 1.2, d.b);   // skuldre
+  if (d.pynt === "muskler") {   // Trener: biceps, brede skuldre, brystmuskler, pannebånd og manual
+    ellipse(c, -7.2, -14.2, 2.4, 2.9, d.b); ellipse(c, 7.2, -14.2, 2.4, 2.9, d.b); hoylys(c, -8.2, -16.2, 1.6, 2, .7); hoylys(c, 5.8, -16.2, 1.6, 2, .7);   // biceps
+    rund(c, -8.4, -18.6, 4, 2.4, 1, d.b); rund(c, 4.4, -18.6, 4, 2.4, 1, d.b);   // skuldre over kroppen
+    c.save(); c.strokeStyle = d.b; c.lineWidth = .6; c.globalAlpha = .7; c.lineCap = "round"; c.beginPath(); c.moveTo(-5, -15.6); c.quadraticCurveTo(-3.6, -14, -2.2, -15); c.moveTo(2.2, -15); c.quadraticCurveTo(3.6, -14, 5, -15.6); c.stroke(); c.restore();   // bryst
+    c.save(); c.globalAlpha = .55; for (let i = 0; i < 3; i++) for (const x of [-2.1, .3]) rund(c, x, -10.9 + i * 1.1, 1.8, .85, .35, d.b); c.restore();   // sixpack
+    strek(c, [[-9.8, -8.6], [-4.2, -8.6]], F.staal, 1); rund(c, -10.6, -10.3, 1.6, 3.4, .5, "#1A2230"); rund(c, -5, -10.3, 1.6, 3.4, .5, "#1A2230");   // manual i venstre hånd
+  }
+  if (d.pynt === "frakk") { rund(c, -5.8, -12, 11.6, 4.5, 1.5, "#EEF1F6"); strek(c, [[0, -17], [0, -8]], d.h, .5, .8); }
+  if (d.pynt === "slips") flate(c, [[-1, -17], [1, -17], [.6, -10], [-.6, -10]], d.h);
+  glod(c, 0, -13, 5, lys, .55, false); ellipse(c, 0, -13, 1.9, 1.9, lys); ellipse(c, 0, -13, .8, .8, "#FFFFFF", .85);   // brystkjerne = tilstand
+  if (d.pynt === "dollar") { c.font = `600 7px "Chakra Petch", sans-serif`; c.textAlign = "center"; c.textBaseline = "alphabetic"; c.fillStyle = d.h; c.fillText("$", 0, -8.6); }
+  if (d.pynt === "pilot") { rund(c, -6.2, -17.6, 12.4, 8.4, 1.8, "#F4F1EA"); rund(c, -4.6, -16.4, 9.2, 5.6, 1.2, d.b); rund(c, -3.8, -15.6, 3, 2.2, .5, "#1A2230"); rund(c, .8, -15.6, 3, 2.2, .5, "#1A2230"); ellipse(c, -2.3, -14.5, .5, .5, "#6FE08A"); ellipse(c, 2.3, -14.5, .5, .5, "#E0463C"); rund(c, -5.2, -9.6, 10.4, 1.2, .4, d.b); strek(c, [[-7.4, -18.2], [-7.4, -12.2]], "#F4F1EA", 1.1); strek(c, [[7.4, -18.2], [7.4, -12.2]], "#F4F1EA", 1.1); }   // pilot: oransje flydress, hvit vest, bryströr og belte
+  if (d.pynt === "hjerne") { rund(c, -5.4, -17.6, 10.8, 8.6, 1.6, d.a); flate(c, [[-1.2, -17.6], [0, -15], [1.2, -17.6]], d.h); flate(c, [[-1, -17.4], [0, -14.4], [1, -17.4]], "#C0392B", 0); rund(c, -2.2, -17, 1.4, 1.6, .4, "#B5402F"); rund(c, .8, -17, 1.4, 1.6, .4, "#B5402F"); rund(c, -.8, -16.7, 1.6, 1, .4, "#B5402F"); rund(c, -5.4, -12.4, 2.4, 1.8, .6, d.b); rund(c, 3, -12.4, 2.4, 1.8, .6, d.b); rund(c, 3.4, -11.2, 4.2, 5.4, .6, "#2F6B49"); strek(c, [[3.8, -10.4], [7.2, -10.4]], d.h, .35, .8); strek(c, [[3.8, -9], [6.2, -9]], d.h, .35, .8); strek(c, [[-8.2, -8], [-8.2, -20]], "#C9B28A", .6); }   // Skole: tweedjakke, sløyfe, albuelapper, bok og peker
+  if (d.pynt === "hodetelefoner") { glod(c, 0, -15.6, 7, "#FFFFFF", .3, false); logo(c, .5, -18.4, "#0A0E16", .44); logo(c, 0, -18.8, "#FFFFFF", .44); }   // ANBU-merket stort på brystet, hvitt med mørk kant og svak glød
+  rund(c, -1.5, -20, 3, 2.2, .6, d.b);   // hals
+  rund(c, -4.2, -27, 8.4, 7.5, 2.8, blandet(d.a, "#FFFFFF", .1)); hoylys(c, -3.4, -26.2, 2.4, 3, 1);   // hode
+  rund(c, -3.2, -24.4, 6.4, 2, .9, a.jobber || a.status === "feil" ? lys : "#1A2230");   // visir
+  if (a.jobber || a.status === "feil") { c.save(); c.globalAlpha = .5; rund(c, -3.2, -24.4, 6.4, 2, .9, "#FFFFFF"); c.restore(); }
+  if (d.pynt === "antenne") { strek(c, [[0, -27], [0, -31.5]], d.h, .7); ellipse(c, 0, -32, 1, 1, lys); rund(c, -4, -25, 8, 2.6, 1, "#1A2230"); }
+  if (d.pynt === "hatt") { rund(c, -6, -29, 12, 1.8, .6, d.h); rund(c, -3.5, -31, 7, 2.5, .8, d.h); strek(c, [[5.5, -28], [6.5, -24.5]], F.gull, .6); }
+  if (d.pynt === "briller") { rund(c, -4.6, -25, 9.2, 3, 1.4, "#1A2230"); strek(c, [[-4.6, -23.5], [4.6, -23.5]], d.h, .5, .9); }
+  if (d.pynt === "hette") { c.beginPath(); c.moveTo(-5.5, -22.5); c.quadraticCurveTo(-5.5, -31.5, 0, -31.5); c.quadraticCurveTo(5.5, -31.5, 5.5, -22.5); c.lineTo(4.5, -22.5); c.quadraticCurveTo(4.5, -29.5, 0, -29.5); c.quadraticCurveTo(-4.5, -29.5, -4.5, -22.5); c.closePath(); c.fillStyle = d.b; c.fill(); }
+  if (d.pynt === "muskler") rund(c, -4.4, -26.6, 8.8, 1.5, .6, d.h);   // pannebånd
+  if (d.pynt === "hvithatt") { ellipse(c, 0, -27.3, 6.8, 1.5, d.h); rund(c, -3.8, -32.2, 7.6, 5.3, 1.6, d.h); rund(c, -3.8, -29.1, 7.6, 1.1, .3, "#3E8BFF"); hoylys(c, -2.6, -31.7, 2, 1.2, .6); }   // white hat med blått bånd: forsvar
+  if (d.pynt === "hjelm") { c.beginPath(); c.arc(0, -26.5, 5, Math.PI, 0); c.closePath(); c.fillStyle = d.h; c.fill(); rund(c, -5.8, -27.1, 11.6, 1.4, .5, d.h); hoylys(c, -3, -30, 3, 1.4, .7); }
+  if (d.pynt === "pilot") { c.beginPath(); c.arc(0, -26.4, 5.6, Math.PI, 0); c.lineTo(5.6, -23); c.lineTo(-5.6, -23); c.closePath(); c.fillStyle = "#F4F1EA"; c.fill(); rund(c, -1, -32.2, 2, 5.6, .6, d.a); rund(c, -5.6, -26.6, 11.2, .9, .3, d.a); rund(c, -4.6, -25.8, 9.2, 3.2, 1.4, "#14181F"); hoylys(c, -3.9, -25.4, 2.4, .9, .8); ellipse(c, -5.4, -24.6, 1.5, 1.5, "#C0392B"); strek(c, [[-6.6, -24.6], [-4.2, -24.6]], "#F4F1EA", .35, .9); strek(c, [[-5.4, -26], [-5.4, -23.2]], "#F4F1EA", .35, .9); rund(c, -5.9, -22.4, 2.2, 1.8, .6, "#9AA3B2"); rund(c, 3.7, -22.4, 2.2, 1.8, .6, "#9AA3B2"); }   // pilot: hvit hjelm med oransje stripe, mørkt visir og opprørsmerke, ørepropper
+  if (d.pynt === "hjerne") {   // Skole: glasskuppel med en rosa hjerne som hode, tykke runde briller og tavlekritt-støv
+    c.save(); c.globalAlpha = .5; ellipse(c, 0, -25.4, 6.4, 7.2, "#CFE8F5"); c.restore();
+    const hj = "#EE97B2", fold = "#B65577"; ellipse(c, -2.6, -26, 3.6, 4.3, hj); ellipse(c, 2.6, -26, 3.6, 4.3, hj); ellipse(c, 0, -29, 4.6, 2.4, hj); ellipse(c, 0, -23.4, 3.6, 1.8, "#D87C9A");
+    strek(c, [[0, -31], [0, -22.6]], fold, .5, .9); for (const [x1, y1, x2, y2] of [[-5, -27, -2.4, -27.6], [-4, -24.6, -1.4, -25.2], [1.4, -28.4, 4, -27.4], [1.6, -25.4, 4.8, -24.6], [-3.8, -29.4, -1.6, -30]]) strek(c, [[x1, y1], [(x1 + x2) / 2, y1 - 1.1], [x2, y2]], fold, .45, .85);
+    hoylys(c, -4.6, -29.4, 2, 1.1, .8); ellipse(c, -2.2, -25.4, 1.9, 1.9, "#FFFFFF", .85); ellipse(c, 2.2, -25.4, 1.9, 1.9, "#FFFFFF", .85); ellipse(c, -2.2, -25.4, .7, .7, "#1A2230"); ellipse(c, 2.2, -25.4, .7, .7, "#1A2230");
+    c.save(); c.strokeStyle = "#1A2230"; c.lineWidth = .6; c.beginPath(); c.arc(-2.2, -25.4, 2.1, 0, 7); c.moveTo(4.3, -25.4); c.arc(2.2, -25.4, 2.1, 0, 7); c.moveTo(-.1, -25.4); c.lineTo(.1, -25.4); c.stroke(); c.restore();
+    if (a.jobber && !stille) for (let q = 0; q < 4; q++) { const u = (performance.now() / 900 + q * .25) % 1; c.globalAlpha = 1 - u; ellipse(c, -6 + q * 4, -32 - u * 6, .5, .5, q % 2 ? "#FFE98A" : "#BFE4FF"); c.globalAlpha = 1; }
+  }
+  if (d.pynt === "hodetelefoner") { c.save(); c.strokeStyle = d.h; c.lineWidth = 1; c.beginPath(); c.arc(0, -24.5, 5.6, Math.PI, 0); c.stroke(); c.restore(); rund(c, -6.4, -25.5, 2.2, 3.4, .9, d.h); rund(c, 4.2, -25.5, 2.2, 3.4, .9, d.h); }
+  if (d.pynt === "anonymous") {   // hettegenser, Guy Fawkes-maske og svart hatt
+    c.beginPath(); c.moveTo(-6.2, -21.5); c.quadraticCurveTo(-6.6, -31, 0, -31.5); c.quadraticCurveTo(6.6, -31, 6.2, -21.5); c.lineTo(5, -21.5); c.quadraticCurveTo(5, -29.6, 0, -29.8); c.quadraticCurveTo(-5, -29.6, -5, -21.5); c.closePath(); c.fillStyle = d.b; c.fill();
+    ellipse(c, 0, -26.3, 4.1, 4.7, d.h); ellipse(c, -2.3, -25.6, .9, .55, "#E7A9A5", .7); ellipse(c, 2.3, -25.6, .9, .55, "#E7A9A5", .7);   // maske og rosa kinn
+    strek(c, [[-3, -27.8], [-1.2, -28.1]], "#1A1420", .45, .95); strek(c, [[1.2, -28.1], [3, -27.8]], "#1A1420", .45, .95);   // smale øyne
+    c.save(); c.strokeStyle = "#1A1420"; c.lineWidth = .5; c.lineCap = "round"; c.beginPath(); c.moveTo(-.4, -24.4); c.quadraticCurveTo(-2, -24.2, -2.9, -25.6); c.moveTo(.4, -24.4); c.quadraticCurveTo(2, -24.2, 2.9, -25.6); c.stroke(); c.restore();   // bart som svinger opp
+    flate(c, [[-.7, -23.2], [.7, -23.2], [0, -21.9]], "#1A1420"); strek(c, [[-1.2, -23.6], [1.2, -23.6]], "#C97A7E", .4, .8);   // fippskjegg og munn
+    ellipse(c, 0, -30.6, 6.8, 1.5, "#0A0A0E"); rund(c, -3.8, -35.5, 7.6, 5.3, 1.6, "#0A0A0E"); rund(c, -3.8, -32.4, 7.6, 1.1, .3, "#2A2630"); hoylys(c, -2.6, -35, 2, 1.2, .6);   // hatt med brem og bånd
+  }
+  if (d.pynt === "programmerer") {   // lue, briller, laptop i hendene og </> på brystet
+    c.beginPath(); c.arc(0, -26.8, 4.8, Math.PI, 0); c.closePath(); c.fillStyle = "#2E3645"; c.fill(); rund(c, -5, -27.6, 10, 1.6, .5, "#3C4658");
+    rund(c, -4.8, -25, 4, 2.4, .9, "#1A2230"); rund(c, .8, -25, 4, 2.4, .9, "#1A2230"); strek(c, [[-.8, -24], [.8, -24]], d.h, .5, .9); strek(c, [[-5, -24.2], [-4.6, -24.2]], d.h, .5, .9); strek(c, [[4.6, -24.2], [5, -24.2]], d.h, .5, .9);   // briller
+    c.font = `600 3.4px "Chakra Petch", sans-serif`; c.textAlign = "center"; c.textBaseline = "alphabetic"; c.fillStyle = d.h; c.fillText("</>", 0, -9.2);
+    rund(c, -4.5, -11.5, 9, 1.4, .4, "#1A2230"); rund(c, -4.2, -16.2, 8.4, 4.8, .6, "#1A2230"); rund(c, -3.6, -15.7, 7.2, 3.8, .4, blandet(lys, "#0A1020", .55)); c.save(); c.globalAlpha = .9; for (let i = 0; i < 3; i++) rund(c, -3 + (i % 2) * .8, -15 + i * 1.1, 2 + i, .5, .2, lys); c.restore();   // laptop med kode på skjermen
+  }
+}
+function ironman(c, d, lys, sv, t) {   // Claudio: rustning med gull plater, lysende reaktor og øyne, høylys på metallet
+  const rod = d.a, mork = d.b, gull = d.h;
+  const metall = (x0, y0, x1, y1) => { const g = c.createLinearGradient(x0, y0, x1, y1); g.addColorStop(0, blandet(rod, "#FFFFFF", .25)); g.addColorStop(.5, rod); g.addColorStop(1, mork); return g; };
+  rund(c, -4.6, -9 + Math.max(0, sv), 3.8, 9 - Math.max(0, sv), 1.4, metall(-4.6, -9, -1, 0)); rund(c, .8, -9 + Math.max(0, -sv), 3.8, 9 - Math.max(0, -sv), 1.4, metall(.8, -9, 4.6, 0));   // bein
+  rund(c, -4.4, -5.5 + Math.max(0, sv), 3.4, 1.4, .5, gull); rund(c, 1, -5.5 + Math.max(0, -sv), 3.4, 1.4, .5, gull);   // knær
+  rund(c, -9, -17.5 - Math.max(0, -sv) * .4, 3, 9, 1.4, metall(-9, -17, -6, -8)); rund(c, 6, -17.5 - Math.max(0, sv) * .4, 3, 9, 1.4, metall(6, -17, 9, -8));   // armer
+  rund(c, -9, -11, 3, 2.6, .8, gull); rund(c, 6, -11, 3, 2.6, .8, gull);   // hansker
+  rund(c, -6.5, -20, 13, 12, 3, metall(-6.5, -20, 6.5, -8)); hoylys(c, -5.4, -19, 3.2, 7, 1.5);   // torso
+  flate(c, [[-4.5, -19], [4.5, -19], [3.2, -11.5], [-3.2, -11.5]], gull);   // brystplate
+  rund(c, -8.6, -20.5, 4.4, 5, 1.8, metall(-8.6, -20, -4, -16)); rund(c, 4.2, -20.5, 4.4, 5, 1.8, metall(4.2, -20, 8.6, -16));   // skulderplater
+  rund(c, -8, -20, 3.2, 1.2, .5, gull); rund(c, 4.8, -20, 3.2, 1.2, .5, gull);
+  glod(c, 0, -15.3, 7, lys, .7, false); ellipse(c, 0, -15.3, 3, 3, mork);
+  stjerne(c, 0, -15.3, 2.6, lys); ellipse(c, 0, -15.3, .9, .9, "#FFFFFF", .95);   // reaktoren er Claude-stjernen, og viser tilstand
+  stjerne(c, -6.4, -18, 1.3, "#F4F1EA"); stjerne(c, 6.4, -18, 1.3, "#F4F1EA");   // merket på skulderplatene
+  rund(c, -1.8, -21.5, 3.6, 2, .6, mork);   // hals
+  rund(c, -4.6, -29, 9.2, 8.5, 3.2, metall(-4.6, -29, 4.6, -21)); hoylys(c, -3.6, -28.2, 2.4, 3.4, 1);   // hjelm
+  flate(c, [[-3.4, -27.6], [3.4, -27.6], [3, -21.6], [-3, -21.6]], gull);   // faceplate
+  rund(c, -2.8, -25.6, 2.2, 1, .4, lys); rund(c, .6, -25.6, 2.2, 1, .4, lys);   // øyne
+  c.save(); c.globalAlpha = .6; rund(c, -2.8, -25.6, 2.2, 1, .4, "#FFFFFF"); rund(c, .6, -25.6, 2.2, 1, .4, "#FFFFFF"); c.restore();
+  strek(c, [[-1.6, -23.4], [1.6, -23.4]], mork, .4, .6);
+}
+function hermes(c, d, lys, sv) {   // Hermes, tegnet etter avataren: mørk bob med lugg og krøllede tupper, kremfarget hårbånd, grønne øyne, brodert krage, puffermer, gullvinger og caduceus
+  const haar = "#1C1826", haar2 = "#3A3452", hud = "#F3D6C2", jakke = "#171A24", jakke2 = "#23283A", neon = "#3FD1C8", neon2 = "#E04A9A";
+  rund(c, -3, -8 + Math.max(0, sv), 2.3, 8 - Math.max(0, sv), 1, "#1A1D28"); rund(c, .7, -8 + Math.max(0, -sv), 2.3, 8 - Math.max(0, -sv), 1, "#1A1D28");   // bukser
+  strek(c, [[-1.9, -7.5 + Math.max(0, sv)], [-1.9, -3]], neon2, .3, .8); strek(c, [[1.8, -7.5 + Math.max(0, -sv)], [1.8, -3]], neon2, .3, .8);   // neonsøm på buksa
+  rund(c, -3.2, -3.2 + Math.max(0, sv), 2.7, 3.2 - Math.max(0, sv), .9, "#0F1118"); rund(c, .5, -3.2 + Math.max(0, -sv), 2.7, 3.2 - Math.max(0, -sv), .9, "#0F1118");   // boots
+  strek(c, [[-3.2, -.5 + Math.max(0, sv)], [-.5, -.5 + Math.max(0, sv)]], neon, .5, .9); strek(c, [[.5, -.5 + Math.max(0, -sv)], [3.2, -.5 + Math.max(0, -sv)]], neon, .5, .9);   // neonsåler
+  const g = c.createLinearGradient(-6, -22, 6, -8); g.addColorStop(0, jakke2); g.addColorStop(1, jakke);
+  c.beginPath(); c.moveTo(-4.2, -22); c.lineTo(4.2, -22); c.lineTo(5.6, -8); c.lineTo(-5.6, -8); c.closePath(); c.fillStyle = g; c.fill();   // techwear-jakke
+  strek(c, [[-3.6, -21], [-4.8, -9]], neon, .35, .9); strek(c, [[3.6, -21], [4.8, -9]], neon2, .35, .9); strek(c, [[-4.3, -15], [4.3, -15]], neon, .35, .6);   // lysende sømmer
+  rund(c, -2.4, -9.6, 4.8, 1, .4, "#0F1118"); ellipse(c, 0, -9.1, .5, .5, neon2);   // belte med spenne
+  for (const sg of [-1, 1]) { rund(c, sg * 6.6 - 1.3, -21.5, 2.6, 7.5, 1.1, jakke2); strek(c, [[sg * 6.6, -21], [sg * 6.6, -15]], sg < 0 ? neon : neon2, .3, .8); ellipse(c, sg * 5.9, -13.6, 1.1, 1.1, hud); }   // ermer og hender
+  c.beginPath(); c.moveTo(-5, -22.4); c.quadraticCurveTo(0, -17, 5, -22.4); c.lineTo(5, -20.6); c.quadraticCurveTo(0, -15.2, -5, -20.6); c.closePath(); c.fillStyle = "#0F1118"; c.fill();   // høy krage
+  c.save(); c.strokeStyle = neon; c.lineWidth = .3; c.globalAlpha = .9; c.beginPath(); c.moveTo(-3.8, -20.4); c.lineTo(-2.2, -18.6); c.lineTo(-.8, -18.6); c.moveTo(3.8, -20.4); c.lineTo(2.2, -18.6); c.lineTo(.8, -18.6); c.moveTo(0, -17.4); c.lineTo(0, -18.6); c.stroke(); c.restore();   // kretsmønster
+  for (const x of [-2.2, .8]) ellipse(c, x, -18.6, .35, .35, neon2); ellipse(c, 2.2, -18.6, .35, .35, neon2);
+  rund(c, -1.3, -23.5, 2.6, 2.2, .6, hud);   // hals
+  glod(c, 0, -16, 4, lys, .5, false); ellipse(c, 0, -16, 1.3, 1.3, lys); ellipse(c, 0, -16, .55, .55, "#FFFFFF", .9);   // brosje = tilstand
+  // hår bak, med krøllede tupper
+  c.beginPath(); c.moveTo(-6.2, -31); c.quadraticCurveTo(-7.2, -24, -5.4, -21.5); c.quadraticCurveTo(-3.6, -20.4, -3.4, -23); c.lineTo(3.4, -23); c.quadraticCurveTo(3.6, -20.4, 5.4, -21.5); c.quadraticCurveTo(7.2, -24, 6.2, -31); c.quadraticCurveTo(5, -37.5, 0, -37.5); c.quadraticCurveTo(-5, -37.5, -6.2, -31); c.closePath(); c.fillStyle = haar; c.fill();
+  ellipse(c, -5.6, -22.4, 1.7, 1.4, haar); ellipse(c, 5.6, -22.4, 1.7, 1.4, haar);
+  rund(c, 3.9, -28.4, 1.4, 2.4, .5, "#2A2E3C"); ellipse(c, 4.6, -27.2, .4, .4, neon); glod(c, 4.6, -27.2, 2, neon, .5, false);   // øreplugg
+  strek(c, [[-4.6, -30], [-5.2, -25]], haar2, .6, .7); strek(c, [[4.8, -30], [5.3, -25]], haar2, .6, .7);   // glans i håret
+  strek(c, [[-5.4, -31.5], [-6.2, -26]], neon2, .5, .85);   // neonstripe i håret
+  // ansikt
+  c.beginPath(); c.moveTo(-4.3, -31); c.quadraticCurveTo(-4.5, -24.5, 0, -23.4); c.quadraticCurveTo(4.5, -24.5, 4.3, -31); c.quadraticCurveTo(3.6, -34.2, 0, -34.4); c.quadraticCurveTo(-3.6, -34.2, -4.3, -31); c.closePath(); c.fillStyle = hud; c.fill();
+  ellipse(c, -2.6, -26.6, 1.1, .6, "#E8A9A0", .45); ellipse(c, 2.6, -26.6, 1.1, .6, "#E8A9A0", .45);   // rødme
+  for (const sg of [-1, 1]) {   // øyne: grønne, med høylys og tynne bryn
+    ellipse(c, sg * 1.9, -28.4, 1.15, .8, "#FFFFFF"); ellipse(c, sg * 1.9, -28.35, .72, .72, "#5E8A4E"); ellipse(c, sg * 1.9, -28.35, .36, .36, "#1A2418"); ellipse(c, sg * 1.9 - .25, -28.7, .22, .22, "#FFFFFF");
+    c.save(); c.strokeStyle = "#1A1420"; c.lineWidth = .3; c.lineCap = "round"; c.beginPath(); c.moveTo(sg * 1, -29.15); c.quadraticCurveTo(sg * 1.9, -29.6, sg * 2.9, -29.1); c.stroke();   // øvre øyelokk
+    c.strokeStyle = "#2A2234"; c.lineWidth = .28; c.beginPath(); c.moveTo(sg * .9, -30.5); c.quadraticCurveTo(sg * 1.9, -31.1, sg * 2.9, -30.4); c.stroke(); c.restore();   // mykt bryn
+  }
+  strek(c, [[-.2, -27.2], [.25, -26.4]], "#C98E85", .3, .7); strek(c, [[-.8, -25.3], [.8, -25.3]], "#C97A7E", .5, .9);   // nese og munn
+  // lugg, hårbånd og vinger
+  c.beginPath(); c.moveTo(-4.6, -33.2); c.quadraticCurveTo(-4.6, -37.6, 0, -37.6); c.quadraticCurveTo(4.6, -37.6, 4.6, -33.2); c.lineTo(4.6, -31); c.quadraticCurveTo(3.4, -30.2, 2.6, -31.6); c.quadraticCurveTo(1.6, -29.6, .4, -31.2); c.quadraticCurveTo(-.8, -29.4, -1.8, -31.4); c.quadraticCurveTo(-2.8, -29.8, -3.6, -31.4); c.quadraticCurveTo(-4.4, -30.6, -4.6, -31); c.closePath(); c.fillStyle = haar; c.fill();
+  c.save(); c.strokeStyle = "#F4E9D2"; c.lineWidth = 1.1; c.lineCap = "round"; c.beginPath(); c.arc(0, -31.4, 5.3, Math.PI * 1.12, Math.PI * 1.88); c.stroke(); c.restore();   // hårbånd
+  for (const sg of [-1, 1]) {   // vinger: tre fjær som feier bakover og opp fra hårbåndet, gull med skygge og høylys
+    const fj = (tx, ty, bredde) => { c.beginPath(); c.moveTo(sg * 5.2, -31.6); c.quadraticCurveTo(sg * (tx * .55), ty - bredde, sg * tx, ty); c.quadraticCurveTo(sg * (tx * .6), ty + bredde * .6, sg * 5.2, -30.4); c.closePath(); };
+    const g = c.createLinearGradient(sg * 5, -31, sg * 12, -37); g.addColorStop(0, "#C89A2E"); g.addColorStop(1, "#F4D878");
+    for (const [tx, ty, b] of [[12.2, -38.2, 2.2], [11.6, -35.2, 1.8], [10.2, -32.4, 1.4]]) { fj(tx, ty, b); c.fillStyle = g; c.fill(); c.save(); c.strokeStyle = "#6A4A12"; c.lineWidth = .28; c.globalAlpha = .8; c.stroke(); c.restore(); }
+    for (const [tx, ty] of [[11.2, -37.2], [10.6, -34.6], [9.4, -32]]) strek(c, [[sg * 6.2, -31.4], [sg * tx, ty]], "#FFF2C8", .3, .7);
+    ellipse(c, sg * 5.3, -31.2, .9, .9, "#F4D878"); ellipse(c, sg * 5.3, -31.2, .4, .4, "#FFF9E0");
+  }
+  strek(c, [[7.2, -4], [7.2, -24]], F.gull, .7); ellipse(c, 7.2, -25, 1, 1, F.gull); strek(c, [[6.1, -21], [8.3, -19], [6.1, -17]], "#EEF1F6", .45, .9);   // caduceus
+}
+
+/* ---------- levende lag ---------- */
+function tegnLiv(c, t) {
+  const puls = stille ? .8 : .7 + .3 * Math.sin(t / 350);
+  for (const r of rommene) {
+    const aks = stil(r);
+    if (r.agenter.some(a => a.jobber)) {   // rommet lyser når noen jobber der
+      c.save(); c.globalAlpha = .13 * puls; flate(c, [[r.x + 1, r.y], [r.x + r.w - 1, r.y], [r.x + r.w, r.y + 1], [r.x + r.w, r.y + r.h - 1], [r.x + r.w - 1, r.y + r.h], [r.x + 1, r.y + r.h], [r.x, r.y + r.h - 1], [r.x, r.y + 1]].map(([a, b]) => px(a, b)), F.rav); c.restore();
+      const [lx, ly] = lampe(c, r, F.rav, .6 + .4 * puls); glod(c, lx, ly, 14, F.rav, .5 * puls, false);
+    }
+    if (r.navn.toLowerCase() === "studio" && r.agenter.some(a => a.jobber)) {   // ANBU lager musikk: equalizer, høyttalerne dunker, noter stiger
+      const takt = stille ? .5 : (Math.sin(t / 250) + 1) / 2;
+      iVegg(c, r, .82, 3, () => { for (let i = 0; i < 6; i++) { const h = stille ? 3 : 2 + 4 * Math.abs(Math.sin(t / 180 + i * 1.3)); rund(c, -6 + i * 2, 19 - h, 1.2, h, .4, i % 2 ? aks : F.hvile); } });
+      for (const kx of [r.x + 1.5, r.x + r.w - 1.5]) { const [mx, my] = px(kx, r.y + r.h - 1); glod(c, mx, my - 6, 9 + 5 * takt, aks, .25 + .25 * takt, false); }
+      if (!stille) for (const f of Object.values(figurer).filter(f => f.rom === r && f.agent.jobber)) { const [fx, fy] = px(f.x, f.y); c.font = `600 6px "Chakra Petch", sans-serif`; c.textAlign = "center"; c.textBaseline = "alphabetic"; for (let k = 0; k < 3; k++) { const u = ((t / 1800 + k / 3) % 1); c.globalAlpha = 1 - u; c.fillStyle = k % 2 ? aks : F.tekst; c.fillText("♪", fx + 7 + Math.sin(u * 9 + k) * 3, fy - 20 - u * 18); } c.globalAlpha = 1; }
+    }
+    if (r.navn.toLowerCase() === "radar" || r.navn.toLowerCase() === "utkikk") {   // antennen sender radiobølger; farge og styrke skifter når noen i Radar jobber
+      const jobb = r.agenter.some(a => a.jobber), pal = ["#4FA8FF", "#B06BFF", "#FF4FD8", "#FFB04F", "#4FFFB0"], u0 = t / 1500, k0 = Math.floor(u0) % pal.length, f = jobb ? blandet(pal[k0], pal[(k0 + 1) % pal.length], u0 % 1) : aks;
+      const [ax, ay] = px(r.x + 1, r.y), tx = ax, ty = ay - VH - 19;
+      glod(c, tx, ty, jobb ? 16 : 8, f, jobb ? .8 : .3, false); ellipse(c, tx, ty, 1.4, 1.4, f); if (jobb) ellipse(c, tx, ty, .6, .6, "#FFFFFF");
+      const n0 = jobb ? 5 : 2;
+      for (let q = 0; q < n0; q++) { const u = stille ? .35 + q * .2 : ((t / (jobb ? 1500 : 2800) + q / n0) % 1), rr = 3 + u * (jobb ? 46 : 26);
+        c.save(); c.globalAlpha = (1 - u) * (jobb ? .95 : .45); c.strokeStyle = f; c.lineWidth = jobb ? 1.3 : .8; c.beginPath(); c.ellipse(tx, ty, rr, rr * .6, 0, 0, 7); c.stroke();
+        if (jobb) { c.globalAlpha = (1 - u) * .35; c.lineWidth = .6; c.beginPath(); c.arc(tx, ty, rr * .75, -Math.PI * .85, -Math.PI * .15); c.stroke(); } c.restore(); }
+      if (jobb && !stille) for (let q = 0; q < 6; q++) { const u = ((t / 1100 + q / 6) % 1), a2 = q * 1.05 + t / 4000; ellipse(c, tx + Math.cos(a2) * u * 40, ty + Math.sin(a2) * u * 24, .8, .8, f); }
+    }
+    if (r.agenter.some(a => a.jobber) && !stille) romliv(c, r, t, aks);
+    if (r.agenter.some(a => a.status === "aktiv") && !stille) {   // maskinene er på: dioder blinker på reolen, hologrammet på Headquarter puster
+      const [mx, my] = px(r.x + r.w - 1.5, r.y + .85);
+      if (front()) for (let i = 0; i < 4; i++) ellipse(c, mx - 3.5, my - 3.4 - i * 3, .5, .5, (Math.floor(t / 400) + i * 3 + r.x) % 5 ? F.hvile : F.skjerm, .8);
+      if (r.side === "hub") { const [hx, hy] = px(r.x + r.w / 2, r.y + r.h - 1.8); glod(c, hx, hy - 16, 12, aks, .14 + .1 * Math.sin(t / 900), false); }
+      if (r.side === "hub") hubFarger(c, r, t);
+    }
+    for (const a of r.agenter) {   // skjermene på pultene
+      const [mx, my] = px(...a.pult), feil = a.status === "feil";
+      if (a.jobber) glod(c, mx, my + 4, 30, F.rav, .4 * puls); else if (feil) glod(c, mx, my + 4, 14, F.rod, .35);
+      if (!front()) continue;
+      c.save(); c.globalAlpha = a.status === "venter" ? .2 : a.status === "aktiv" || a.status === "planlagt" || a.status === "plan" ? .85 : 1;
+      skjermTema(c, a.navn, mx - 5.2, my - 17.7, 10.4, 6.9, t, feil ? F.rod : agentFarge(a), stille);   // eget tema per agent
+      c.globalAlpha = a.jobber ? .6 + .4 * puls : feil ? 1 : a.status === "venter" ? .15 : .5; rund(c, mx - 5.2, my - 17.7, 10.4, 1, .4, lysFor(a));   // statuslist øverst
+      if (!stille && a.status === "aktiv" && !a.jobber) { c.globalAlpha = .18; rund(c, mx - 5.2, my - 17.7 + (t / 40 + mx) % 6.9, 10.4, .8, .3, F.tekst); }
+      c.restore();
+    }
+  }
+  // Agenter som jobber samtidig henger sammen: lyspakker gjennom korridorene via Headquarter. Vises bare når begge faktisk jobber nå.
+  const jobbere = Object.values(figurer).filter(f => f.agent.jobber), nav = rommene[0];
+  const vei = f => f.rom === nav ? [[f.x, f.y]] : [[f.x, f.y], ...stubbEnder(f.rom).reverse()];
+  for (let i = 0; i < jobbere.length; i++) for (let j = i + 1; j < jobbere.length; j++) {
+    const a = jobbere[i], b = jobbere[j];
+    const sti = a.rom === b.rom ? [[a.x, a.y], [b.x, b.y]] : [...vei(a), [nav.x + nav.w / 2, nav.y + nav.h / 2], ...vei(b).reverse()];
+    const pkt = sti.map(([x, y]) => px(x, y)), len = [0]; for (let k = 1; k < pkt.length; k++) len.push(len[k - 1] + Math.hypot(pkt[k][0] - pkt[k - 1][0], pkt[k][1] - pkt[k - 1][1]));
+    const ca = agentFarge(a.agent), cb = agentFarge(b.agent), L2 = pkt.map(([x, y]) => [x, y - 1]), gr = c.createLinearGradient(L2[0][0], L2[0][1], L2[L2.length - 1][0], L2[L2.length - 1][1]); gr.addColorStop(0, ca); gr.addColorStop(1, cb);
+    c.save(); c.lineCap = "round"; c.lineJoin = "round"; c.strokeStyle = gr; c.beginPath(); L2.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y));
+    c.globalAlpha = .22; c.lineWidth = 5; c.stroke(); c.globalAlpha = .55; c.lineWidth = 2; c.stroke();   // bred glød under, kjerne over
+    c.globalAlpha = 1; c.lineWidth = .9; c.setLineDash([4, 3]); c.lineDashOffset = stille ? 0 : -t / 45; c.stroke(); c.restore();   // streker som flyter
+    if (!stille) for (const [ff, cc] of [[a, ca], [b, cb]]) { const [fx, fy] = px(ff.x, ff.y), ph = (t / 900) % 1; c.save(); c.globalAlpha = (1 - ph) * .9; c.strokeStyle = cc; c.lineWidth = 1.2; c.beginPath(); c.ellipse(fx, fy, 4 + 14 * ph, (4 + 14 * ph) * .45, 0, 0, 7); c.stroke(); c.restore(); }   // ring fra den som sender
+    if (stille) continue;
+    const total = len[len.length - 1], antall = Math.max(2, Math.round(total / 40));
+    for (let k = 0; k < antall; k++) {
+      const u = ((t / (total * 12) + k / antall + i * .17) % 1), dd = (k % 2 ? 1 - u : u) * total, seg = Math.max(1, len.findIndex(l => l >= dd)), f = (dd - len[seg - 1]) / (len[seg] - len[seg - 1] || 1);
+      const qx = pkt[seg - 1][0] + (pkt[seg][0] - pkt[seg - 1][0]) * f, qy = pkt[seg - 1][1] + (pkt[seg][1] - pkt[seg - 1][1]) * f - 1;
+      const pf = k % 2 ? cb : ca; glod(c, qx, qy, 11, pf, .95, false); glod(c, qx, qy, 5, "#FFFFFF", .55, false);
+      for (let tr = 1; tr <= 4; tr++) { const dd2 = dd - (k % 2 ? -1 : 1) * tr * 3, sg = Math.max(1, len.findIndex(l => l >= Math.min(total, Math.max(0, dd2)))), fq = (Math.min(total, Math.max(0, dd2)) - len[sg - 1]) / (len[sg] - len[sg - 1] || 1); ellipse(c, pkt[sg - 1][0] + (pkt[sg][0] - pkt[sg - 1][0]) * fq, pkt[sg - 1][1] + (pkt[sg][1] - pkt[sg - 1][1]) * fq - 1, 1.5 - tr * .28, 1.5 - tr * .28, pf, .7 - tr * .15); }   // hale bak pakken
+      ellipse(c, qx, qy, 1.8, 1.8, pf); ellipse(c, qx, qy, .85, .85, "#FFFFFF");   // pakken har fargen til avsenderen
+    }
+  }
+  skilt(c, t, stille);
+  romstasjon(c, t, stille);
+  treff = [];
+  for (const f of Object.values(figurer).sort((a, b) => dyp(a.x, a.y) - dyp(b.x, b.y))) figur(c, f, t);
+}
+function hubFarger(c, r, t) {   // Headquarter lever i alle basenes farger: ringer rundt hologrammet og lysflekker som stiger
+  const { x, y, w, h } = r, [mx, my] = px(x + w / 2, y + h - 1.9 + .1);
+  const pal = alleFarger(); pal.forEach((fg, i) => { const v = t / (2200 + i * 300) + i * 1.3, rr = 7 + i * 1.6; c.save(); c.globalAlpha = .55; c.strokeStyle = fg; c.lineWidth = .7; c.beginPath(); c.ellipse(mx, my - 16 + Math.sin(v) * 2, rr, rr * .38, Math.sin(v * .6) * .25, 0, 7); c.stroke(); c.restore(); ellipse(c, mx + Math.cos(v * 1.6) * rr, my - 16 + Math.sin(v * 1.6) * rr * .38, .8, .8, fg); glod(c, mx + Math.cos(v * 1.6) * rr, my - 16 + Math.sin(v * 1.6) * rr * .38, 4, fg, .6, false); });   // fargede ringer rundt hologrammet, én per base
+  if (!stille) for (let q = 0; q < 14; q++) { const fg = pal[q % pal.length], uu = ((t / 3600 + q * .071) % 1), bx = x + 1.5 + ((q * 37) % 100) / 100 * (w - 3); const [cx2, cy2] = px(bx, y + 1.2 + ((q * 53) % 100) / 100 * (h - 3)); c.globalAlpha = Math.sin(uu * Math.PI) * .8; ellipse(c, cx2, cy2 - uu * 8, .7, .7, fg); glod(c, cx2, cy2 - uu * 8, 3, fg, .5, false); c.globalAlpha = 1; }   // fargede lysflekker som stiger
+}
+
+function skilt(c, t, stille) {   // «cyberos»: stasjonens navn i cyberpunk-neon, med glitch, flimmer og skanner. Henger i rommet nordvest for Headquarter.
+  const hub = rommene[0]; if (!hub) return;
+  const [ax0, ay0] = px(hub.x - 20, hub.y - 17), ax = ax0 - 8, ay = ay0 + 70, W = 156, H = 32, u = stille ? 0 : t / 1000, nav = "CYBEROS";
+  c.save(); c.translate(ax, ay);
+  const cy = "#19F2FF", mg = "#FF2BD6", gl = "#FFE83A", gr = "#35FF8A";
+  for (const x of [-W * .38, W * .38]) { strek(c, [[x, H / 2 + 6], [x, H / 2 + 24]], "#3A4659", 1.4); ellipse(c, x, H / 2 + 24, 1.6, .8, "#1A2230"); }   // oppheng
+  glod(c, 0, 0, W * .62, mg, .22, false); glod(c, -W * .28, 0, W * .4, cy, .22, false);
+  rund(c, -W / 2 - 5, -H / 2 - 7, W + 10, H + 14, 4, "#0B0714"); rund(c, -W / 2 - 3, -H / 2 - 5, W + 6, H + 10, 3, "#120A1E");
+  const gk = c.createLinearGradient(-W / 2, 0, W / 2, 0); gk.addColorStop(0, cy); gk.addColorStop(.5, mg); gk.addColorStop(1, gl);
+  c.save(); c.strokeStyle = gk; c.lineWidth = 1.4; c.shadowColor = mg; c.shadowBlur = 8; c.beginPath(); c.roundRect(-W / 2 - 3, -H / 2 - 5, W + 6, H + 10, 3); c.stroke(); c.restore();
+  for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const bx = sx * (W / 2 + 3), by = sy * (H / 2 + 5); strek(c, [[bx - sx * 9, by], [bx, by], [bx, by - sy * 7]], gl, 1.6, .95); }   // hjørnebraketter
+  for (let i = 0; i < 6; i++) ellipse(c, -W / 2 + 4 + i * (W - 8) / 5, -H / 2 - 3.4, .7, .7, i % 2 ? cy : mg, .9);   // nitter og lamper
+  c.font = '700 24px "Chakra Petch", "Atkinson Hyperlegible", sans-serif'; c.textBaseline = "alphabetic"; c.textAlign = "left";
+  if ("letterSpacing" in c) c.letterSpacing = "1.5px";
+  const bs = [...nav].map(ch => c.measureText(ch).width + 1.5), tot = bs.reduce((a, b) => a + b, 0); let x0 = -tot / 2; const base = 7.5;
+  const gli = !stille && (t % 5200) < 140, dx = gli ? (Math.sin(t) > 0 ? 2.2 : -2.2) : 0;
+  [...nav].forEach((ch, i) => {
+    const flim = stille ? 1 : (ch === "I" || ch === "$") && Math.sin(u * 17 + i * 3) * Math.sin(u * 5.3 + i) > .72 ? .25 : 1, farge = ch === "$" ? gl : "#F6F2FF";
+    c.save(); c.globalAlpha = flim;
+    c.shadowColor = ch === "$" ? gl : mg; c.shadowBlur = 14; c.fillStyle = ch === "$" ? gl : mg; c.fillText(ch, x0 + 1.2, base);   // magenta glød
+    c.shadowColor = cy; c.fillStyle = cy; c.shadowBlur = 8; c.fillText(ch, x0 - 1.1 + dx, base - .4);   // cyan kromatisk kant
+    c.shadowBlur = 0; c.fillStyle = farge; c.fillText(ch, x0 + dx * .5, base);
+    c.restore(); x0 += bs[i];
+  });
+  if ("letterSpacing" in c) c.letterSpacing = "0px";
+  strek(c, [[-W / 2 + 5, -H / 2 + 3.4], [W / 2 - 5, -H / 2 + 3.4]], gk, .8, .85);   // øvre stripe
+  for (let i = 0; i < 12; i++) { const hh = stille ? 2 : 1 + 2.6 * Math.abs(Math.sin(u * 3 + i * .9)); rund(c, -W / 2 + 6 + i * 2.2, -H / 2 + 3 - hh, 1.3, hh, .3, i % 3 ? cy : mg); rund(c, W / 2 - 6 - 12 * 2.2 + i * 2.2, -H / 2 + 3 - hh, 1.3, hh, .3, i % 3 ? gr : gl); }   // equalizer-stolper i kantene
+  if (!stille) { const sx = -W / 2 + ((u * 40) % (W + 30)); c.save(); c.beginPath(); c.rect(-W / 2, -H / 2, W, H); c.clip(); const sg = c.createLinearGradient(sx - 14, 0, sx + 14, 0); sg.addColorStop(0, "rgba(25,242,255,0)"); sg.addColorStop(.5, "rgba(255,255,255,.28)"); sg.addColorStop(1, "rgba(255,43,214,0)"); c.fillStyle = sg; c.fillRect(sx - 14, -H / 2, 28, H); c.globalAlpha = .08; c.fillStyle = "#FFFFFF"; for (let y2 = -H / 2; y2 < H / 2; y2 += 2) c.fillRect(-W / 2, y2, W, .6); c.restore(); }   // skanner og scanlinjer
+  c.restore();
+}
+
+function romstasjon(c, t, stille) {   // gjør cyberos til en romstasjon: motorer, navigasjonslys, parabol, satellitter og stjerneskudd
+  const hub = rommene[0]; if (!hub) return;
+  const u = stille ? 0 : t / 1000, xs = rommene.flatMap(r => [px(r.x, r.y)[0], px(r.x + r.w, r.y + r.h)[0]]), ys = rommene.flatMap(r => [px(r.x, r.y)[1], px(r.x + r.w, r.y + r.h)[1]]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  // 1. motorer under skroget til Headquarter: fire dyser med levende plasma
+  for (let i = 0; i < 4; i++) {
+    const [ex, ey] = px(hub.x + 3 + i * (hub.w - 6) / 3, hub.y + hub.h + .6), fl = stille ? 1 : .75 + .25 * Math.sin(u * 14 + i * 2);
+    rund(c, ex - 3.2, ey + HEV * .55, 6.4, 4.2, 1, "#2A3140"); rund(c, ex - 2.4, ey + HEV * .55 + 3.6, 4.8, 2.6, .8, "#141922");   // dyse
+    glod(c, ex, ey + HEV * .55 + 8, 10 * fl, "#4FA8FF", .7 * fl, false); glod(c, ex, ey + HEV * .55 + 7, 5 * fl, "#E8F6FF", .9 * fl, false);
+    c.save(); c.globalAlpha = .55 * fl; const g = c.createLinearGradient(ex, ey + HEV * .55 + 6, ex, ey + HEV * .55 + 24); g.addColorStop(0, "#9FD4FF"); g.addColorStop(1, "rgba(79,168,255,0)"); c.fillStyle = g; c.beginPath(); c.moveTo(ex - 2.2, ey + HEV * .55 + 6); c.lineTo(ex + 2.2, ey + HEV * .55 + 6); c.lineTo(ex + .5, ey + HEV * .55 + 24 * fl); c.lineTo(ex - .5, ey + HEV * .55 + 24 * fl); c.fill(); c.restore();
+  }
+  // 2. navigasjonslys på alle rom: rødt til venstre, grønt til høyre, blinker i takt
+  rommene.forEach((r, i) => { const [lx, ly] = px(r.x, r.y + r.h), [rx, ry] = px(r.x + r.w, r.y), on = stille || Math.floor(u * 1.4 + i * .37) % 2 === 0; for (const [ax2, ay2, fg] of [[lx, ly, "#FF3B3B"], [rx, ry, "#35FF8A"]]) { ellipse(c, ax2, ay2 - 1, 1.1, 1.1, on ? fg : "#2A2230"); if (on) glod(c, ax2, ay2 - 1, 6, fg, .8, false); } });
+  // 3. parabol på Headquarter med skannende stråle
+  { const [dx, dy] = px(hub.x + hub.w - 3, hub.y), top = dy - VH - HEV * .15; strek(c, [[dx, dy - 2], [dx, top]], "#5A6578", 1.4); c.save(); c.translate(dx, top); c.rotate(-.5 + Math.sin(u * .7) * .35); ellipse(c, 0, 0, 5.6, 2, "#C7D0DD"); ellipse(c, 0, -.3, 4.6, 1.4, "#8A96A8"); strek(c, [[0, 0], [0, -4]], "#C7D0DD", .7); ellipse(c, 0, -4.4, .9, .9, "#FF2BD6"); glod(c, 0, -4.4, 5, "#FF2BD6", .8, false); c.restore(); }
+  // 4. satellitter og skyttel i bane rundt stasjonen
+  [[1.06, .86, .16, "#4FA8FF", 0], [1.18, .98, -.11, "#FFB04F", 2.1], [.98, 1.06, .21, "#B06BFF", 4.2]].forEach(([fx, fy, sp, fg, ph], i) => {
+    const a = (stille ? .5 : u * sp) + ph, ox = cx + Math.cos(a) * (x1 - x0) * fx * .62, oy = cy + Math.sin(a) * (y1 - y0) * fy * .62, vx = -Math.sin(a), sc = .9 + .15 * Math.sin(a);
+    c.save(); c.translate(ox, oy); c.scale(sc, sc);
+    if (i === 1) { flate(c, [[-5, 0], [3, -2.4], [7, 0], [3, 2.4]], "#C7D0DD"); flate(c, [[-1, -.9], [3, -1.6], [5, 0], [3, 1.6], [-1, .9]], "#6B7689"); ellipse(c, 4, 0, 1.2, .8, fg); glod(c, -6, 0, 5 + (stille ? 0 : Math.sin(u * 20) * 1.2), "#4FA8FF", .8, false); }   // skyttel med motorglød
+    else { rund(c, -2, -2, 4, 4, .8, "#9AA3B2"); rund(c, -11, -1.4, 8, 2.8, .4, "#1D3F7A"); rund(c, 3, -1.4, 8, 2.8, .4, "#1D3F7A"); for (let k = 0; k < 3; k++) { strek(c, [[-10 + k * 2.6, -1.4], [-10 + k * 2.6, 1.4]], "#4F7FC8", .3, .8); strek(c, [[4 + k * 2.6, -1.4], [4 + k * 2.6, 1.4]], "#4F7FC8", .3, .8); } ellipse(c, 0, -2.6, .8, .8, fg); strek(c, [[0, -2], [0, -3.2]], "#C7D0DD", .5); }
+    if (!stille && Math.floor(u * 1.7 + i) % 2 === 0) glod(c, 0, -2.6, 5, fg, .9, false);
+    c.restore();
+  });
+  // 5. stjerneskudd, ett hvert sjette sekund
+  if (!stille) { const ph = (u / 6) % 1; if (ph < .12) { const k = ph / .12, sx = x0 + (x1 - x0) * (.15 + .5 * ((Math.floor(u / 6) * 37) % 100) / 100), sy = y0 - 10 + 30 * k; c.save(); c.globalAlpha = Math.sin(k * Math.PI); const g = c.createLinearGradient(sx + 60 * k, sy, sx + 60 * k - 40, sy - 18); g.addColorStop(0, "#FFFFFF"); g.addColorStop(1, "rgba(255,255,255,0)"); c.strokeStyle = g; c.lineWidth = 1.2; c.beginPath(); c.moveTo(sx + 60 * k, sy); c.lineTo(sx + 60 * k - 40, sy - 18); c.stroke(); c.restore(); } }
+  // 6. solcellevinger på master ytterst på hver side, med glimt som sveiper over
+  [[Math.min(...rommene.map(r => px(r.x, r.y + r.h / 2)[0])), -1], [Math.max(...rommene.map(r => px(r.x + r.w, r.y + r.h / 2)[0])), 1]].forEach(([ex, side], i) => {
+    const r0 = rommene.reduce((m, r) => (side < 0 ? px(r.x, r.y)[0] < px(m.x, m.y)[0] : px(r.x + r.w, r.y)[0] > px(m.x + m.w, m.y)[0]) ? r : m, rommene[0]), [mx, my] = px(r0.x + r0.w / 2, r0.y + r0.h / 2), bx = ex + side * 6, by = my - 12;
+    strek(c, [[bx - side * 5, by + 6], [bx + side * 4, by - 2]], "#8A96A8", 1.4); strek(c, [[bx + side * 4, by - 2], [bx + side * 4, by - 14]], "#5A6578", 1.2);
+    for (let q = 0; q < 2; q++) { const wx = bx + side * (8 + q * 30), wy = by - 12 - q * 3; c.save(); c.translate(wx, wy); c.transform(side, .0, side * .42, 1, 0, 0);
+      const g = c.createLinearGradient(0, 0, 26, 12); g.addColorStop(0, "#2A5FB8"); g.addColorStop(1, "#14306A"); rund(c, 0, 0, 26, 12, 1, g); strek(c, [[0, 0], [26, 0], [26, 12], [0, 12]], "#9FC4FF", .5, .8, true);
+      for (let k = 1; k < 6; k++) strek(c, [[k * 26 / 6, 0], [k * 26 / 6, 12]], "#6FA0E8", .35, .7); strek(c, [[0, 6], [26, 6]], "#6FA0E8", .35, .7);
+      if (!stille) { const sx = ((u * 22 + i * 9 + q * 13) % 50) - 12; c.save(); c.beginPath(); c.rect(0, 0, 26, 12); c.clip(); const sg = c.createLinearGradient(sx - 6, 0, sx + 6, 0); sg.addColorStop(0, "rgba(255,255,255,0)"); sg.addColorStop(.5, "rgba(255,255,255,.55)"); sg.addColorStop(1, "rgba(255,255,255,0)"); c.fillStyle = sg; c.fillRect(sx - 6, 0, 12, 12); c.restore(); }
+      c.restore(); }
+    ellipse(c, bx + side * 4, by - 14, .9, .9, "#FFB04F"); glod(c, bx + side * 4, by - 14, 5, "#FFB04F", .6, false);
+  });
+  // 7. dokkingringer der korridorene møter Headquarter, i rommets farge; pulserer når noen jobber der
+  rommene.slice(1).forEach((r, i) => { if (!r.stubb) return; const [[ax, ay], [bx, by]] = stubbEnder(r), [dx, dy] = px(ax, ay), fg = stil(r), jobb = r.agenter.some(a => a.jobber), ph = stille ? 0 : (u * (jobb ? 1.4 : .5) + i * .3) % 1;
+    c.save(); c.strokeStyle = fg; c.lineWidth = 1.5; c.globalAlpha = .9; c.beginPath(); c.ellipse(dx, dy - 4, 7, 3.4, 0, 0, 7); c.stroke(); c.lineWidth = .6; c.globalAlpha = .5; c.beginPath(); c.ellipse(dx, dy - 4, 9.5, 4.8, 0, 0, 7); c.stroke();
+    c.globalAlpha = (1 - ph) * (jobb ? .9 : .4); c.lineWidth = 1; c.beginPath(); c.ellipse(dx, dy - 4, 7 + 9 * ph, 3.4 + 4.4 * ph, 0, 0, 7); c.stroke(); c.restore();
+    for (let k = 0; k < 6; k++) { const a2 = k * Math.PI / 3 + (stille ? 0 : u * .8); ellipse(c, dx + Math.cos(a2) * 7, dy - 4 + Math.sin(a2) * 3.4, .6, .6, k % 2 ? fg : "#FFFFFF"); } });
+}
+function romliv(c, r, t, aks) {   // det hvert rom gjør når noen der jobber nå. Bare da.
+  const n = r.navn.toLowerCase(), { x, y, w, h } = r, fy = y + h - 1.9;
+  if (r.side === "hub") {   // hologrammet viser basene som jobber nå, som lysende prikker rundt ringen
+    const [mx, my] = px(x + w / 2, fy + .1), aktive = rommene.filter(q => q !== r && q.agenter.some(a => a.jobber));
+    aktive.forEach((q, i) => { const v = t / 1500 + i * Math.PI * 2 / Math.max(1, aktive.length); ellipse(c, mx + Math.cos(v) * 6, my - 16 + Math.sin(v) * 2.7, 1, 1, stil(q)); glod(c, mx + Math.cos(v) * 6, my - 16 + Math.sin(v) * 2.7, 3, stil(q), .6, false); });
+  }
+  if (n === "verksted") for (const a of r.agenter.filter(a => a.jobber)) {   // gnister fra pulten
+    const [mx, my] = px(...a.pult); for (let k = 0; k < 6; k++) { const u = ((t / 700 + k * .37) % 1), sx = mx + (hash(k, 7) % 9 - 4) * u, sy = my - 8 - u * 9 + u * u * 6; c.globalAlpha = 1 - u; ellipse(c, sx, sy, .5, .5, k % 2 ? F.rav : F.tekst); } c.globalAlpha = 1;
+  }
+  if (n === "lab") iVegg(c, r, .52, 0, () => { for (let i = 0; i < 24; i++) { const v = i / 24 * Math.PI * 4 + t / 700, xx = -6.5 + i * .55, y1 = 8 + Math.sin(v) * 3.2, y2 = 8 - Math.sin(v) * 3.2; strek(c, [[xx, y1], [xx, y2]], i % 2 ? aks : F.tekst, .35, .55); ellipse(c, xx, y1, .55, .55, aks); ellipse(c, xx, y2, .55, .55, "#EE97B2"); } });   // DNA-spiral som roterer
+  if (n === "verksted") iVegg(c, r, .25, 3, () => { for (let i = 0; i < 6; i++) { const v = 1 + 5.2 * Math.abs(Math.sin(t / 900 + i * 1.4)); rund(c, -5.6 + i * 2, 10.8 - v, 1.3, v, .3, i === 3 ? "#E3C25A" : aks); } strek(c, [[-6, 11.6], [6, 11.6]], F.staal, .3, .7); ellipse(c, 6, 4.4, .5, .5, Math.sin(t / 300) > 0 ? "#6FE08A" : "#1A2230"); });   // serverstolper
+  if (n === "lab") { const [bx, by] = px(x + 1.5, fy + .5); for (let k = 0; k < 4; k++) { const u = ((t / 2200 + k * .25) % 1); c.globalAlpha = .7 * (1 - u); ellipse(c, bx - 1.5 + (k % 3), by - 3 - u * 9, .5 + k * .15, .5 + k * .15, "#9FE8FF"); } c.globalAlpha = 1; }   // bobler i tanken
+  if (n === "wallstreet" || n === "marked") iVegg(c, r, .5, 0, () => { for (let i = 0; i < 7; i++) { const hh = 2 + 4 * Math.abs(Math.sin(t / 600 + i * 1.1)); rund(c, -6 + i * 2, 11 - hh, 1.2, hh, .3, i % 3 === 2 ? F.rod : aks); } });   // kurstavla ruller
+  if (n === "helse") iVegg(c, r, .5, 0, () => { const u = (t / 1400) % 1 * (PULS.length - 1), i = Math.floor(u), k = u - i, [x0, y0] = PULS[i], [x1, y1] = PULS[i + 1], qx = x0 + (x1 - x0) * k, qy = y0 + (y1 - y0) * k; glod(c, qx, qy, 2.5, aks, .7, false); ellipse(c, qx, qy, .6, .6, F.tekst); });   // pulsen løper over skjermen
+  if (n === "radar" || n === "utkikk") iVegg(c, r, .5, 0, () => { const v = t / 900; c.save(); c.globalAlpha = .85; c.strokeStyle = aks; c.lineWidth = .6; c.beginPath(); c.moveTo(0, 9); c.lineTo(Math.cos(v) * 4.5, 9 + Math.sin(v) * 4.5); c.stroke(); c.globalAlpha = .25; c.fillStyle = aks; c.beginPath(); c.moveTo(0, 9); c.arc(0, 9, 4.5, v - .9, v); c.closePath(); c.fill(); c.restore(); });   // sveipende radarstråle
+}
+function flytt(f, dt) {
+  const a = f.agent, r = f.rom;
+  if (stille || a.status === "venter" || a.status === "feil") { [f.x, f.y] = f.plass; f.gaar = false; return; }
+  if (a.jobber) f.maal = f.plass;
+  else if (!f.maal) {
+    if ((f.pause -= dt) > 0) return;
+    const opptatt = r.agenter.filter(q => q.jobber && q.navn !== a.navn).map(q => q.plass);   // den som rusler holder seg unna pulten til den som jobber
+    for (let k = 0; k < 8; k++) { f.maal = [r.x + 1.5 + Math.random() * (r.w - 3), r.y + 2.4 + Math.random() * (r.h - 4.8)]; if (opptatt.every(([qx, qy]) => Math.hypot(qx - f.maal[0], qy - f.maal[1]) > 2.2)) break; }
+    f.pause = (3 + Math.random() * 6) / (a.navn.toLowerCase() === "hermes" ? 2.5 : 1);
+  }
+  const tempo = a.navn.toLowerCase() === "hermes" ? 2.2 : 1;   // budbringeren er rask
+  const dx = f.maal[0] - f.x, dy = f.maal[1] - f.y, d = Math.hypot(dx, dy), fart = (a.jobber ? 1.8 : .7) * tempo * dt;
+  if (d <= fart) { [f.x, f.y] = f.maal; f.gaar = false; if (!a.jobber) f.maal = null; }
+  else { f.x += dx / d * fart; f.y += dy / d * fart; f.gaar = true; }
+}
+
+/* ---------- kamera ---------- */
+let Smaal = 2, anker = null, panMaal = null;
+const DPR = () => Math.min(2, devicePixelRatio || 1);   // iPhone har 3, men 2 ser likt ut på canvas og halverer pikslene per ramme
+function storrelse() {   // ruta endret størrelse: nytt lerret, ny himmel, og stasjonen tilpasses
+  const dpr = DPR(), st = kart.parentElement;
+  kart.width = Math.round(st.clientWidth * dpr); kart.height = Math.round(st.clientHeight * dpr);
+  tilpass(); tegnHimmel(); tilpasset = true;
+}
+function ramme_() {   // boksen rundt alt som tegnes, i u: rommene med vegger over og skrog under
+  const pk = rommene.flatMap(r => [[r.x, r.y], [r.x + r.w, r.y], [r.x, r.y + r.h], [r.x + r.w, r.y + r.h]].map(([a, b]) => px(a, b)));
+  const xs = pk.map(p => p[0]), ys = pk.map(p => p[1]);
+  return { x: Math.min(...xs) - 4, y: Math.min(...ys) - VH - 14, w: Math.max(...xs) - Math.min(...xs) + 8, h: Math.max(...ys) - Math.min(...ys) + VH + SK + HEV + 22 };
+}
+function tilpass() {   // zoom og midtpunkt så hele stasjonen får plass med 8 % luft rundt. Brukerens zoom og dra gjelder til neste endring av størrelse eller rom.
+  if (!rommene.length) return;
+  const b = ramme_(), dpr = DPR(), minS = 32 * dpr / 33;   // aldri så langt ut at en liten figur (33 u) blir under 32 css-px høy
+  const passer = Math.min(kart.width * .92 / b.w, kart.height * .92 / b.h);
+  S = Smaal = Math.min(6, Math.max(minS, passer));
+  if (passer >= minS) pan = { x: kart.width / 2 - (b.x + b.w / 2) * S, y: kart.height / 2 - (b.y + b.h / 2) * S };
+  else { const n = rommene[0], [cx, cy] = px(n.x + n.w / 2, n.y + n.h / 2); pan = { x: kart.width / 2 - cx * S, y: kart.height / 2 - cy * S }; }   // får ikke plass: sentrer på Headquarter, brukeren drar for å se resten
+  panMaal = null; klem();
+}
+function midt() { tilpass(); }
+function snu(retning) { rot = (rot + retning + 4) % 4; maal(); tilpass(); stille && ramme(); }
+function zoom(steg, cx = kart.width / 2, cy = kart.height / 2) { Smaal = Math.max(1.2, Math.min(9, Smaal * Math.pow(1.3, steg))); anker = [cx, cy]; panMaal = null; if (stille) { settS(Smaal); ramme(); } }
+function settS(ny) { const [cx, cy] = anker || [kart.width / 2, kart.height / 2]; pan.x = cx - (cx - pan.x) * ny / S; pan.y = cy - (cy - pan.y) * ny / S; S = ny; klem(); }
+function klem() { const bw = enhet[0] * S, bh = enhet[1] * S, m = 80 * DPR(); pan.x = Math.min(kart.width - m, Math.max(m - bw, pan.x)); pan.y = Math.min(kart.height - m, Math.max(m - bh, pan.y)); }
+function fokuser(navn) {   // zoom inn på et rom, glidende
+  const r = rommene.find(r => r.navn === navn); if (!r) return;
+  const [cx, cy] = px(r.x + r.w / 2, r.y + r.h / 2); Smaal = Math.max(S, 3.6); anker = [kart.width / 2, kart.height / 2];
+  panMaal = { x: kart.width / 2 - cx * Smaal, y: kart.height / 2 - cy * Smaal };
+  if (stille) { S = Smaal; pan = { ...panMaal }; panMaal = null; klem(); ramme(); }
+}
+
+function ramme(t = 0) {
+  const c = ktx, dpr = DPR();
+  c.setTransform(1, 0, 0, 1, 0, 0); c.imageSmoothingEnabled = true; c.imageSmoothingQuality = "high";
+  const hx = Math.max(kart.width - himmel.width * SB, Math.min(0, Math.round(pan.x * PARALLAKSE) - himE * SB)), hy = Math.max(kart.height - himmel.height * SB, Math.min(0, Math.round(pan.y * PARALLAKSE) - himE * SB));
+  c.drawImage(himmel, hx, hy, himmel.width * SB, himmel.height * SB);
+  c.drawImage(jordL, hx + jordPos[0] * SB, hy + jordPos[1] * SB, jordL.width * SB, jordL.height * SB);
+  if (!stille) {   // levende himmel: stjerner som blinker og et stjerneskudd iblant
+    for (const [x, y, fase, klar] of blink) { c.globalAlpha = .25 + .75 * Math.abs(Math.sin(t / 900 + fase)); c.fillStyle = klar ? F.tekst : F.hvile; c.beginPath(); c.arc(hx + x * SB, hy + y * SB, SB * .8, 0, 7); c.fill(); }
+    if (!skudd && Math.random() < .0015) skudd = { x: Math.random() * himmel.width * .8, y: Math.random() * himmel.height * .3, start: t };
+    if (skudd) { const k = (t - skudd.start) / 700; if (k > 1) skudd = null; else { c.globalAlpha = 1 - k; const gx = hx + (skudd.x + k * 60) * SB, gy = hy + (skudd.y + k * 24) * SB, g = c.createLinearGradient(gx - 20 * SB, gy - 8 * SB, gx, gy); g.addColorStop(0, "transparent"); g.addColorStop(1, F.tekst); c.strokeStyle = g; c.lineWidth = 1.5; c.beginPath(); c.moveTo(gx - 20 * SB, gy - 8 * SB); c.lineTo(gx, gy); c.stroke(); } }
+    c.globalAlpha = 1;
+  }
+  if (!Sb || Math.abs(S - Sb) / Sb > .2) tegnBak();   // statisk lag i omtrent riktig skala
+  c.drawImage(bak, pan.x, pan.y, enhet[0] * S, enhet[1] * S);
+  // romnavn som merkelapper, i skjermkoordinater, under figurene. Skriften krymper med zoomen ned til 9 px; under det blir lappen en prikk i rommets farge.
+  const skala = Math.min(1, S / 2), romPx = 12 * skala, prikk = romPx < 9;
+  c.textBaseline = "middle"; c.textAlign = "center"; c.font = `600 ${Math.max(9, romPx) * dpr}px "Chakra Petch", sans-serif`;
+  romTreff = [];
+  for (const r of rommene) {
+    const [x, y] = [[r.x, r.y], [r.x + r.w, r.y], [r.x, r.y + r.h], [r.x + r.w, r.y + r.h]].map(([a, b]) => px(a, b)).sort((p, q) => p[1] - q[1])[0];
+    const sx = pan.x + x * S, sy = pan.y + (y - VH - 9) * S, hL = (prikk ? 12 : 20 * Math.max(.75, skala)) * dpr, w = prikk ? hL : c.measureText(r.navn).width + 18 * dpr;
+    c.fillStyle = "rgba(14,20,32,.75)"; c.beginPath(); c.roundRect(sx - w / 2, sy - hL / 2, w, hL, hL / 2); c.fill();
+    if (r.side === "hub" && rommene.length > 2) { const g = c.createLinearGradient(sx - w / 2, 0, sx + w / 2, 0), f = alleFarger(); f.forEach((h, i) => g.addColorStop(i / (f.length - 1), h)); c.strokeStyle = g; c.fillStyle = g; } else { c.strokeStyle = rgba(stil(r), .7); c.fillStyle = stil(r); }
+    c.lineWidth = dpr; c.stroke();
+    if (prikk) { c.beginPath(); c.arc(sx, sy, 3 * dpr, 0, 7); c.fill(); } else c.fillText(r.navn, sx, sy + dpr);
+    romTreff.push({ navn: r.navn, x: sx - w / 2, y: sy - hL / 2, w, h: hL });
+  }
+  c.setTransform(S, 0, 0, S, pan.x, pan.y);
+  tegnLiv(c, t);
+  // agentnavn under figurene, i skjermkoordinater
+  c.setTransform(1, 0, 0, 1, 0, 0); c.textBaseline = "middle"; c.textAlign = "center";
+  const figPx = 11 * skala; c.font = `600 ${figPx * dpr}px "Chakra Petch", sans-serif`;
+  const lapper = [], hL = 16 * skala * dpr;   // navnelappene under figurene, skalert med zoomen; skjules under 9 px. En lapp som ville dekke en annen, flyttes ned til den er fri
+  for (const h of figPx < 9 ? [] : [...treff].sort((a, b) => a.Y - b.Y || a.X - b.X)) {
+    const w = c.measureText(h.vis).width + 10 * dpr, x = pan.x + h.X * S - w / 2; let y = pan.y + h.Y * S + 2 * dpr;
+    for (let k = 0; k < 6 && lapper.some(l => x < l.x + l.w && x + w > l.x && y < l.y + hL && y + hL > l.y); k++) y += hL + 2 * dpr;
+    lapper.push({ x, y, w, h, vis: h.vis, venter: h.venter });
+  }
+  for (const l of lapper) {
+    c.fillStyle = "rgba(14,20,32,.65)"; c.beginPath(); c.roundRect(l.x, l.y, l.w, hL, 8 * dpr); c.fill();
+    c.fillStyle = l.venter ? F.staal : F.tekst; c.fillText(l.vis, l.x + l.w / 2, l.y + hL / 2 + dpr);
+  }
+}
+let sist = 0, tregt = 0, lav = false;   // lav = sparemodus: 20 bilder i sekundet, ingen jordrotasjon, færre blinkende stjerner
+function loop(t) {
+  requestAnimationFrame(loop);
+  if (document.hidden || !data || t - sist < (lav ? 50 : 33)) return;
+  const dt = Math.min(.1, (t - sist) / 1000); sist = t;
+  const start = performance.now();
+  if (!lav && t - sistJord > 9000 && !jordJobb) { sistJord = t; jordLon -= .35; jordStart(); }
+  if (jordJobb) jordSteg(3);
+  if (Math.abs(Smaal - S) > .003) settS(S + (Smaal - S) * .25); else if (S !== Smaal) settS(Smaal);
+  if (panMaal) { pan.x += (panMaal.x - pan.x) * .2; pan.y += (panMaal.y - pan.y) * .2; if (Math.hypot(panMaal.x - pan.x, panMaal.y - pan.y) < 1) panMaal = null; klem(); }
+  for (const f of Object.values(figurer)) flytt(f, dt);
+  ramme(t);
+  const brukt = performance.now() - start; tregt = brukt > 28 ? tregt + 1 : Math.max(0, tregt - 1);   // mange trege rammer på rad = skru ned
+  if (!lav && tregt > 20) { lav = true; blink = blink.slice(0, 12); console.info("cyberos: sparemodus, rammene tar " + brukt.toFixed(0) + " ms"); }
+}
+
+/* ---------- dashbordet rundt ---------- */
+function tegn(d) {
+  document.getElementById("tom").style.display = d.agenter.length ? "none" : "block";
+  bygg(d); if (!tilpasset) storrelse(); else if (rommene.length !== tegn.antRom) tilpass(); else klem();   // nytt antall rom: tilpass på nytt
+  tegn.antRom = rommene.length;
+  const navn = d.agenter.map(a => a.navn + (a.jobber ? "+" : "") + (a.status || "")).join("|"), m = document.getElementById("mannskap");
+  if (m.dataset.navn !== navn) {   // bare bygg knappene om når noe er endret, ellers mister tastaturet fokus
+    m.dataset.navn = navn;
+    m.innerHTML = d.agenter.map(a => `<button data-navn="${esc(a.navn)}">${esc(a.kallenavn || a.navn)}${a.jobber ? ", jobber nå" : a.status === "feil" ? ", feil" : ""}</button>`).join("");
+    m.querySelectorAll("button").forEach(b => { b.onclick = () => velg(b.dataset.navn); b.onfocus = () => { fokus = b.dataset.navn; stille && ramme(); }; b.onblur = () => { fokus = null; stille && ramme(); }; });
+  }
+  const t = d.tall;
+  document.getElementById("tall").innerHTML = [[t.jobber, "jobber nå", t.jobber ? "rav" : ""], [t.i_dag, "kjøringer i dag", ""], [t.feil_24t, "feil siste døgn", t.feil_24t ? "rod" : ""], [t.apne, "åpne oppgaver", ""]]
+    .map(([v, l, k]) => `<div class="kpi"><b class="${k}">${v}</b><span>${l}</span></div>`).join("");
+  const kost = a => a.kostnad_mnd || a.budsjett_mnd ? `<span class="kost ${a.budsjett_mnd && +a.kostnad_mnd > +a.budsjett_mnd ? "over" : ""}">${a.kostnad_mnd || 0}${a.budsjett_mnd ? " / " + esc(a.budsjett_mnd) : ""} kr</span>` : "";
+  const opp = a => { const n = d.oppgaver.filter(o => !o.ferdig && o.tildelt.toLowerCase() === a.navn.toLowerCase()).length; return n ? `<span class="opp" title="åpne oppgaver">${n} ☐</span>` : ""; };
+  const hva = a => a.jobber ? esc(a.siste?.utdrag || "jobber nå") : a.status === "feil" ? "feil: " + esc(a.siste?.utdrag || "") : a.status === "venter" ? esc(a.rolle || "ikke bygd ennå") : "venter på jobb";
+  document.getElementById("avdelinger").innerHTML = rommene.map(r => `<div class="avd" style="--aks:${stil(r)}${r.side === "hub" && rommene.length > 2 ? `;--bar:linear-gradient(135deg,${alleFarger().join(",")})` : ""}"><button onclick="fokuser('${esc(r.navn)}')" title="Zoom til ${esc(r.navn)}">${esc(r.navn)}</button><ul class="agenter">${r.agenter.map(a =>
+    `<li onclick="velg('${esc(a.navn)}')"><i class="prikk ${a.jobber ? "jobber" : a.status === "feil" ? "feil" : a.status === "venter" ? "venter" : "aktiv"}"></i><span class="vis">${esc(a.kallenavn || a.navn)}</span><span class="hva">${hva(a)}</span>${opp(a)}${kost(a)}</li>`).join("")}</ul></div>`).join("");
+  // døgnet: 24 timer, nå-markør, en prikk per kjøring i rommets farge
+  const naa = new Date(), NAA = 93, romFor = navn => rommene.find(r => r.agenter.some(a => a.navn.toLowerCase() === String(navn).toLowerCase() || (a.kallenavn || "").toLowerCase() === String(navn).toLowerCase()));
+  const pos = tid => { const [h, mi] = tid.split(":").map(Number); let d = (h + mi / 60) - (naa.getHours() + naa.getMinutes() / 60); if (d > 0) d -= 24; return NAA * (1 + d / 24); };   // 24 t bak = 0 %, nå = NAA %, resten er luft så de siste prikkene ikke klemmes mot kanten
+  const timer = []; for (let k = 0; k <= 24; k += 3) { const h = (naa.getHours() - 24 + k + 24) % 24; timer.push(`<span class="strek" style="left:${NAA * k / 24}%"></span><span class="time" style="${k ? `left:${NAA * k / 24}%` : "left:4px;transform:none"}">${k === 24 ? "nå" : String(h).padStart(2, "0")}</span>`); }   // første lapp ville ellers stå halvt utenfor
+  document.getElementById("tidslinje").innerHTML = timer.join("") + `<span class="naa" style="left:${NAA}%"></span>` + (d.dogn || []).map(k => { const r = romFor(k.agent); return `<span class="kj ${k.status === "feil" ? "feil" : ""}" style="left:${pos(k.tid)}%;--aks:${r ? stil(r) : F.staal}" title="${esc(k.tid + " " + k.agent + " " + k.status)}"></span>`; }).join("");
+  if (stille) { for (const f of Object.values(figurer)) flytt(f, 0); ramme(); }
+}
+let drag = null, sisteTomt = null;
+kart.onpointerdown = e => { drag = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y, flyttet: false, sisteTomt }; kart.setPointerCapture(e.pointerId); };
+kart.onpointermove = e => {
+  if (!drag) return;
+  const dpr = kart.width / kart.clientWidth, dx = (e.clientX - drag.x) * dpr, dy = (e.clientY - drag.y) * dpr;
+  if (Math.hypot(dx, dy) > 6 * dpr) drag.flyttet = true;
+  if (drag.flyttet) { pan.x = drag.px + dx; pan.y = drag.py + dy; panMaal = null; klem(); kart.classList.add("drar"); stille && ramme(); }
+};
+kart.onpointerup = e => {
+  if (!drag) return;
+  if (!drag.flyttet) {
+    const b = kart.getBoundingClientRect(), dpr = kart.width / b.width, mx = (e.clientX - b.left) * dpr, my = (e.clientY - b.top) * dpr;
+    const minst = 44 * dpr;   // trefflate minst 44 css-px rundt figurer og romnavn, uansett zoom
+    const inni = (x, y, w, h) => { const ex = Math.max(0, (minst - w) / 2), ey = Math.max(0, (minst - h) / 2); return mx >= x - ex && mx <= x + w + ex && my >= y - ey && my <= y + h + ey; };
+    const kand = treff.filter(h => inni(pan.x + h.x * S, pan.y + h.y * S, h.w * S, h.h * S));   // flere i nærheten: den med senteret nærmest trykket
+    const h = kand.sort((p, q) => Math.hypot(pan.x + (p.x + p.w / 2) * S - mx, pan.y + (p.y + p.h / 2) * S - my) - Math.hypot(pan.x + (q.x + q.w / 2) * S - mx, pan.y + (q.y + q.h / 2) * S - my))[0];
+    const r = h ? null : romTreff.find(r => inni(r.x, r.y, r.w, r.h));
+    if (h) velg(h.navn); else if (r) fokuser(r.navn);
+    else {   // dobbelttrykk på tom himmel: tilbake til autozoom
+      const naa = performance.now(), d = drag.sisteTomt;
+      if (d && naa - d.t < 350 && Math.hypot(d.x - mx, d.y - my) < 30 * dpr) { tilpass(); stille && ramme(); sisteTomt = null; } else sisteTomt = { t: naa, x: mx, y: my };
+    }
+  }
+  drag = null; kart.classList.remove("drar");
+};
+kart.onpointercancel = () => { drag = null; kart.classList.remove("drar"); };
+kart.onwheel = e => { e.preventDefault(); const b = kart.getBoundingClientRect(), dpr = kart.width / b.width; zoom(Math.max(-1, Math.min(1, -e.deltaY / 100)), (e.clientX - b.left) * dpr, (e.clientY - b.top) * dpr); };
+const fingre = new Map(); let klypS = null, klypAvstand = 0;   // klyp med to fingre
+kart.addEventListener("pointerdown", e => { fingre.set(e.pointerId, e); if (fingre.size === 2) { const [a, b] = [...fingre.values()]; klypAvstand = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY); klypS = Smaal; drag = null; } });
+kart.addEventListener("pointermove", e => {
+  if (!fingre.has(e.pointerId)) return; fingre.set(e.pointerId, e);
+  if (fingre.size === 2 && klypS) { const [a, b] = [...fingre.values()]; Smaal = Math.max(1.2, Math.min(9, klypS * Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / klypAvstand)); anker = [(a.clientX + b.clientX) / 2 * (kart.width / kart.clientWidth), (a.clientY + b.clientY) / 2 * (kart.width / kart.clientWidth)]; if (stille) { settS(Smaal); ramme(); } }
+});
+for (const t of ["pointerup", "pointercancel"]) kart.addEventListener(t, e => { fingre.delete(e.pointerId); if (fingre.size < 2) klypS = null; });
+addEventListener("keydown", e => {
+  if (e.target.matches("input, textarea") || e.altKey || e.ctrlKey || e.metaKey) return;
+  const k = e.key.toLowerCase();
+  if (k === "q") snu(-1); else if (k === "e") snu(1); else if (k === "+" || k === "=") zoom(1); else if (k === "-") zoom(-1); else if (k === "/") document.querySelector("#jarvis input").focus(); else return;
+  e.preventDefault();
+});
+function velg(navn) {
+  valgt = valgt === navn ? null : navn;
+  const el = document.getElementById("detalj"), a = data.agenter.find(x => x.navn === valgt);
+  if (!a) { el.className = ""; stille && ramme(); return; }
+  const tilstand = a.jobber ? `<span class="ok">jobber nå</span>` : a.status === "feil" ? `<span class="feil">feil</span>` : `<span class="dim">${esc(a.status || "venter")}</span>`;
+  el.innerHTML = `<button aria-label="Lukk" onclick="velg(null)">lukk</button><div class="navn">${esc(a.kallenavn || a.navn)}</div>
+    <p>${esc(a.rolle || "")} · ${tilstand}</p><p class="dim">${esc(a.verktoy || "")} · ${esc(rom(a))}</p>
+    ${a.historikk?.length ? `<ul class="hist">${a.historikk.map(l => `<li><span class="tid">${klokke(l.navn)}</span><span class="${klasse(l.status)}">${esc(l.status)}</span><span class="dim">${esc(l.utdrag)}</span></li>`).join("")}</ul>` : `<p class="dim">Ingen kjøringer ennå.</p>`}
+    ${(() => { const o = data.oppgaver.filter(o => !o.ferdig && o.tildelt.toLowerCase() === a.navn.toLowerCase()); return o.length ? `<p class="dim">Åpne oppgaver: ${o.map(x => esc(x.tekst)).join(" · ")}</p>` : ""; })()}
+    <form onsubmit="return giJobb(event, '${esc(a.navn)}')"><input name="tekst" maxlength="2000" placeholder="Gi ${esc(a.kallenavn || a.navn)} en jobb" aria-label="Jobb til ${esc(a.kallenavn || a.navn)}" autocomplete="off"><button type="submit">Send</button></form><div class="svar" aria-live="polite"></div>`;
+  el.className = "vis"; stille && ramme();
+}
+async function giJobb(e, navn) {   // skriver jobben til Innboks/ i vaulten via backend. Det eneste dashbordet skriver.
+  e.preventDefault();
+  const form = e.target, inn = form.tekst, svar = form.nextElementSibling, tekst = inn.value.trim(); if (!tekst) return false;
+  svar.textContent = "sender"; form.querySelector("button").disabled = true;
+  try {
+    const r = await fetch("/api/innboks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agent: navn, tekst }) });
+    if (!r.ok) throw new Error((await r.json()).detail || r.status);
+    svar.textContent = "lagt i innboksen: " + (await r.json()).fil; inn.value = ""; last().catch(() => {});
+  } catch (err) { svar.textContent = "fikk ikke sendt: " + err.message; }
+  form.querySelector("button").disabled = false; return false;
+}
+const klasse = st => ({ ok: "ok", feil: "feil", varsel: "varsel", "pågår": "paagaar" })[st] || "dim";   // loggstatus til farge
+const hermesNavn = () => (data?.agenter.find(a => a.navn.toLowerCase() === "hermes") || data?.agenter.find(a => a.status === "aktiv") || data?.agenter[0])?.navn;
+function mottaker(tekst) {   // «si til Trener at …», «be Plutus om …», «Trener: …» går til den agenten. Alt annet til Hermes. Navn eller kallenavn, uansett store bokstaver.
+  const navn = (data?.agenter || []).flatMap(a => [a.navn, a.kallenavn].filter(Boolean).map(n => [n.toLowerCase(), a.navn]));
+  const m = tekst.match(/^(?:si til|be|spør|fortell)\s+(\S+?)[,:.]?\s+(?:at|om|å)?\s*(.+)$/is) || tekst.match(/^(\S+?)[,:]\s+(.+)$/s);
+  const treff = m && navn.find(([n]) => n === m[1].toLowerCase());
+  return treff ? [treff[1], m[2].trim()] : [hermesNavn(), tekst];
+}
+async function siTil(e) {   // Jarvis-boksen: skriver til innboksen til Hermes, eller til agenten du nevner først.
+  e.preventDefault(); const form = e.target, svar = form.querySelector(".svar"), [til, tekst] = mottaker(form.tekst.value.trim()); if (!tekst || !til) return false;
+  svar.textContent = "sender";
+  try {
+    const r = await fetch("/api/innboks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agent: til, tekst }) });
+    if (!r.ok) throw new Error((await r.json()).detail || r.status);
+    svar.textContent = "sendt til " + til; form.tekst.value = ""; si("Sent to " + til + ", sir."); last().catch(() => {});
+  } catch (err) { svar.textContent = "fikk ikke sendt: " + err.message; }
+  return false;
+}
+/* Jarvis: av til du slår den på, og valget huskes i nettleseren. «Jarvis på» gir både ører og stemme: mikrofonen lytter hele tiden og venter på vekkeordet.
+   Stemmen er en rolig britisk mann, som Jarvis: Daniel eller Arthur på iPhone og Mac, Ryan, George eller Thomas i Edge og Chrome, ellers den beste som finnes.
+   Jarvis snakker engelsk, kort, og bare om ekte hendelser: sendte jobber, agenter som begynner, blir ferdige eller feiler. Sier aldri sitt eget navn, det er vekkeordet. */
+let stemmePaa = false; try { stemmePaa = localStorage.getItem("jarvis") === "på"; } catch {}
+function jarvisStemme() {
+  const v = speechSynthesis.getVoices(), finn = f => v.find(f);
+  return finn(x => /Daniel|Arthur|Ryan|George|Thomas/.test(x.name) && /en[-_]GB/i.test(x.lang)) || finn(x => /UK English Male/i.test(x.name)) || finn(x => /en[-_]GB/i.test(x.lang)) || finn(x => /^en/i.test(x.lang)) || v[0];
+}
+function si(tekst) {
+  if (!stemmePaa || !("speechSynthesis" in window)) return;
+  const u = new SpeechSynthesisUtterance(tekst), v = jarvisStemme(); if (v) { u.voice = v; u.lang = v.lang; } u.rate = .92; u.pitch = .85;
+  speechSynthesis.cancel(); speechSynthesis.speak(u);
+}
+function stemmeAvPaa() {
+  stemmePaa = !stemmePaa; try { localStorage.setItem("jarvis", stemmePaa ? "på" : "av"); } catch {}
+  const k = document.getElementById("stemme"); k.textContent = stemmePaa ? "Jarvis på" : "Jarvis av"; k.setAttribute("aria-pressed", String(stemmePaa));
+  if (stemmePaa) {
+    speechSynthesis.getVoices(); const h = new Date().getHours();
+    setTimeout(() => si((h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening") + ", sir. All systems are online, and I am listening."), 150);
+    lytt(true);
+  } else if (gjenkjenner) gjenkjenner.stop();
+}
+const navnPaa = a => a.kallenavn || a.navn;
+let forrigeTilstand = null;
+function meld(d) {   // Jarvis sier fra om det som endret seg siden sist henting
+  const naa = Object.fromEntries(d.agenter.map(a => [a.navn, a.jobber ? "jobber" : a.status === "feil" ? "feil" : a.siste?.status === "varsel" ? "varsel" : "rolig"]));
+  if (forrigeTilstand && stemmePaa) {
+    const m = [];
+    for (const a of d.agenter) {
+      const for_ = forrigeTilstand[a.navn], n = naa[a.navn]; if (!for_ || for_ === n) continue;
+      if (n === "jobber") m.push(`${navnPaa(a)} is on it.`); else if (n === "feil") m.push(`${navnPaa(a)} ran into a problem.`); else if (n === "varsel") m.push(`${navnPaa(a)} raised a flag.`); else if (for_ === "jobber") m.push(`${navnPaa(a)} is done.`);
+    }
+    if (m.length) si(m.slice(0, 3).join(" "));
+  }
+  forrigeTilstand = naa;
+}
+/* Tale inn med nettleserens egen gjenkjenning (Chrome, Edge, Safari). To måter:
+   Mikrofonknappen: ett opptak, sendes når du slutter å snakke.
+   Jarvis på: lytter hele tiden. Alt ignoreres til du sier «Jarvis» eller «hei Jarvis»; ordene etter havner i feltet, og 3,5 s stillhet etter siste ord sender til Hermes.
+   Safari og Chrome stopper gjenkjenningen av seg selv etter litt stillhet, så `onend` starter den på nytt så lenge Jarvis er på. Hvert opptak er en ny økt, så sendt tekst kommer ikke igjen.
+   shortcut: vekkeordet gjelder bare i samme opptak, si beskjeden rett etter «Jarvis». Egen vekkeord-modell når det plager. */
+let gjenkjenner = null, lyttTimer = null;
+const VEKK = /\b(hei|hey|ok|okay)?\s*(jarvis|jarvi|jervis)\b/i;   // gjenkjenningen staver navnet litt ulikt
+function lytt(alltid = false) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition, knapp = document.getElementById("mikk"), form = document.getElementById("jarvis"), svar = form.querySelector(".svar");
+  if (!SR) { svar.textContent = "nettleseren har ikke talegjenkjenning"; return; }
+  if (gjenkjenner) { gjenkjenner.stop(); return; }
+  const g = gjenkjenner = new SR(); g.lang = "nb-NO"; g.interimResults = true; g.continuous = alltid; knapp.classList.add(alltid ? "hoerer" : "lytter");   // hoerer: venter på vekkeordet. lytter: tar opp beskjeden
+  let vaaken = !alltid;
+  g.onresult = ev => {
+    let tekst = [...ev.results].map(r => r[0].transcript).join(" ");
+    if (alltid) {
+      const m = tekst.match(VEKK); if (!m) return;
+      vaaken = true; knapp.classList.replace("hoerer", "lytter"); tekst = tekst.slice(m.index + m[0].length).replace(/^[\s,.!?]+/, "");
+      clearTimeout(lyttTimer); lyttTimer = setTimeout(() => g.stop(), 3500);
+    }
+    form.tekst.value = tekst;
+  };
+  g.onend = () => {
+    knapp.classList.remove("lytter", "hoerer"); gjenkjenner = null; clearTimeout(lyttTimer);
+    if (vaaken && form.tekst.value.trim()) form.requestSubmit();
+    if (stemmePaa) setTimeout(() => { if (stemmePaa && !gjenkjenner) lytt(true); }, 300);
+  };
+  g.onerror = e => {
+    if (!/not-allowed|audio-capture|service-not-allowed|network/.test(e.error)) return;   // no-speech og aborted er vanlig, onend tar det
+    svar.textContent = e.error === "network" ? "talegjenkjenning virker ikke i denne nettleseren (Brave): bruk Edge eller mobilen" : e.error === "audio-capture" ? "fant ingen mikrofon, sjekk at den er på" : "fikk ikke bruke mikrofonen: tillat den i nettleseren (krever https)";
+    if (stemmePaa) stemmeAvPaa();   // ellers starter onend den på nytt i det uendelige
+  };
+  try { g.start(); } catch { gjenkjenner = null; knapp.classList.remove("lytter", "hoerer"); }
+}
+async function last() {
+  const r = await fetch("/api/status"); data = await r.json(); const t = data.tall;
+  document.getElementById("stripe").innerHTML = `<span><b>${t.agenter}</b>agenter</span><span><b class="${t.jobber ? "rav" : ""}">${t.jobber}</b>jobber nå</span><span><b>${t.apne}</b>åpne oppgaver</span><span><b>${data.innboks.length}</b>i innboksen</span>`;
+  meld(data);
+  const hn = hermesNavn(); if (hn) { const inn = document.querySelector("#jarvis input"); inn.placeholder = "Si til " + hn; inn.setAttribute("aria-label", "Si til " + hn); }
+  tegn(data);
+  const romFor = navn => { const a = data.agenter.find(x => x.navn.toLowerCase() === String(navn).toLowerCase()); return a ? rom(a) : ""; }, farge = n => { const r = rommene.find(r => r.navn === romFor(n)); return r ? stil(r) : F.staal; };
+  document.getElementById("loggliste").innerHTML = data.logg.map(l =>
+    `<li style="--aks:${farge(l.agent)}"><span class="tid">${klokke(l.navn)}</span><span><span class="navn">${esc(l.agent || "")}</span> <span class="${klasse(l.status)}">${esc(l.status || "")}</span> <span class="rom">${esc(romFor(l.agent))}</span><br><span class="dim">${esc(l.utdrag)}</span></span></li>`).join("") || `<li class="dim">Ingen kjøringer ennå. Hermes skriver hit.</li>`;
+  document.getElementById("innboksliste").innerHTML = data.innboks.map(i =>   // jobber ingen har tatt ennå. Agenten flytter fila til Innboks/Ferdig/ når den er gjort
+    `<li><span class="tid">${klokke(i.navn)}</span><span><span class="navn">${esc(i.til)}</span> <span class="dim">${esc(i.utdrag)}</span></span></li>`).join("") || `<li class="dim">Tom. Si til Jarvis, eller gi en agent en jobb fra panelet.</li>`;
+  document.getElementById("oppgaver").innerHTML = data.oppgaver.map(o => `<li class="${o.ferdig ? "ferdig" : ""}"><span>${o.ferdig ? "☑" : "☐"}</span><span>${esc(o.tekst)}${o.tildelt ? ` <span class="dim">· ${esc(o.tildelt)}</span>` : ""}</span></li>`).join("") || `<li class="dim">Ingen oppgaver. Lag en sjekkliste i Oppgaver/.</li>`;
+  document.getElementById("oppdatert").textContent = document.getElementById("oppdatert-bunn").textContent = "oppdatert " + new Date().toLocaleTimeString("no");
+}
+if (stemmePaa) { const k = document.getElementById("stemme"); k.textContent = "Jarvis på"; k.setAttribute("aria-pressed", "true"); lytt(true); }   // Safari nekter uten et trykk først: da slår onerror Jarvis av, og du trykker én gang
+last().catch(e => { document.getElementById("oppdatert").textContent = "fikk ikke kontakt med serveren: " + e.message; });
+setInterval(() => last().catch(() => {}), 10000);
+addEventListener("resize", () => { if (data) { storrelse(); ramme(); } });
+if (!stille) requestAnimationFrame(loop);
+</script>
+</body>
+</html>
